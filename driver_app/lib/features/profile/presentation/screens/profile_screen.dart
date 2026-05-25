@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../../../features/auth/presentation/providers/auth_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
-class DriverProfileScreen extends ConsumerWidget {
-  const DriverProfileScreen({super.key});
+class ProfileScreen extends ConsumerWidget {
+  const ProfileScreen({super.key});
 
   void _showLanguageDialog(BuildContext context) {
     const languages = [
@@ -42,10 +44,10 @@ class DriverProfileScreen extends ConsumerWidget {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ref.read(authControllerProvider.notifier).signOut();
-              context.go('/auth');
+              await Supabase.instance.client.auth.signOut();
+              if (context.mounted) context.go('/auth');
             },
             child: const Text('خروج', style: TextStyle(color: Colors.red)),
           ),
@@ -56,15 +58,15 @@ class DriverProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userAsync = ref.watch(currentUserProvider);
+    final driverAsync = ref.watch(currentDriverProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('ملفي الشخصي'), elevation: 0),
-      body: userAsync.when(
+      body: driverAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('خطأ: $e')),
         data: (user) {
-          final name = user?.fullName ?? 'السائق';
+          final name = user?.name ?? 'السائق';
           final phone = user?.phone ?? '';
           final referralCode = user?.referralCode ?? '------';
 
