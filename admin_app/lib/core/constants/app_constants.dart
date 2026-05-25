@@ -2,8 +2,8 @@ class AppConstants {
   AppConstants._();
 
   // Supabase — replace with your real values
-  static const String supabaseUrl     = 'https://YOUR_PROJECT_ID.supabase.co';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+  static const String supabaseUrl     = 'https://oyearthvuorctyoyoknf.supabase.co';
+  static const String supabaseAnonKey = 'sb_publishable_c-OIUVRVoaADF7qAo3QgJA_9ValKuJS';
 
   // Google Maps (used in dashboard live-map)
   static const String googleMapsApiKey = 'YOUR_GOOGLE_MAPS_API_KEY';
