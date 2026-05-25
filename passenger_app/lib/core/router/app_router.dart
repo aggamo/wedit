@@ -20,6 +20,7 @@ import '../../features/ride/presentation/screens/rating_screen.dart';
 import '../../features/ride/presentation/screens/ride_completed_screen.dart';
 import '../../features/ride/presentation/screens/ride_offers_screen.dart';
 import '../../features/ride/presentation/screens/tracking_screen.dart';
+import '../../features/support/presentation/screens/support_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -304,34 +305,3 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 }
 
-/// Placeholder support screen
-class SupportScreen extends StatelessWidget {
-  const SupportScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Support')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.support_agent, size: 80, color: Colors.grey),
-            const SizedBox(height: 16),
-            const Text('Customer Support', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text('Call us: +251 911 123 456'),
-            const SizedBox(height: 8),
-            const Text('Email: support@wedit.et'),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.chat),
-              label: const Text('Start Chat'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
