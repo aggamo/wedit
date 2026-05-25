@@ -6,8 +6,8 @@ class AppConstants {
   static const String appVersion = '1.0.0';
 
   // Supabase
-  static const String supabaseUrl = 'YOUR_SUPABASE_URL';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+  static const String supabaseUrl = 'https://oyearthvuorctyoyoknf.supabase.co';
+  static const String supabaseAnonKey = 'sb_publishable_c-OIUVRVoaADF7qAo3QgJA_9ValKuJS';
 
   // Tables
   static const String driversTable = 'drivers';
