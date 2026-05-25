@@ -9,8 +9,8 @@ class AppConstants {
   static const String appBuildNumber = '1';
 
   // Supabase
-  static const String supabaseUrl = 'https://YOUR_PROJECT_ID.supabase.co';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+  static const String supabaseUrl = 'https://oyearthvuorctyoyoknf.supabase.co';
+  static const String supabaseAnonKey = 'sb_publishable_c-OIUVRVoaADF7qAo3QgJA_9ValKuJS';
 
   // Google Maps
   static const String googleMapsApiKey = 'YOUR_GOOGLE_MAPS_API_KEY';
