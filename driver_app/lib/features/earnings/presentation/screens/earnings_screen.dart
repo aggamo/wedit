@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -174,7 +173,7 @@ class _EarningsTabContent extends StatelessWidget {
               SizedBox(
                 height: 160,
                 child: _BarChart(
-                  data: earnings.dailyBreakdown.take(7).toList(),
+                  earnings: earnings.dailyBreakdown.take(7).toList(),
                 ),
               ),
               const SizedBox(height: 20),
@@ -189,7 +188,7 @@ class _EarningsTabContent extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ...earnings.dailyBreakdown.map((day) =>
-                  _DayTransactionTile(data: day)),
+                  _DayTransactionTile(earning: day)),
             ] else ...[
               const Center(
                 child: Padding(
@@ -343,9 +342,9 @@ class _StatCard extends StatelessWidget {
 }
 
 class _DayTransactionTile extends StatelessWidget {
-  final Map<String, dynamic> data;
+  final DailyEarning earning;
 
-  const _DayTransactionTile({required this.data});
+  const _DayTransactionTile({required this.earning});
 
   String _formatDate(DateTime date) {
     const dayNames = [
@@ -362,9 +361,9 @@ class _DayTransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = data['date'] as DateTime;
-    final amount = (data['amount'] as num?)?.toDouble() ?? 0;
-    final rides = (data['rides'] as int?) ?? 0;
+    final date = earning.date;
+    final amount = earning.amount;
+    final rides = earning.rides;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -402,17 +401,17 @@ class _DayTransactionTile extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _BarChart extends StatelessWidget {
-  final List<Map<String, dynamic>> data;
+  final List<DailyEarning> earnings;
 
-  const _BarChart({required this.data});
+  const _BarChart({required this.earnings});
 
   @override
   Widget build(BuildContext context) {
-    if (data.isEmpty) return const SizedBox.shrink();
+    if (earnings.isEmpty) return const SizedBox.shrink();
 
     return CustomPaint(
       painter: _BarChartPainter(
-        data: data,
+        earnings: earnings,
         barColor: AppTheme.primaryColor,
       ),
     );
@@ -420,27 +419,27 @@ class _BarChart extends StatelessWidget {
 }
 
 class _BarChartPainter extends CustomPainter {
-  final List<Map<String, dynamic>> data;
+  final List<DailyEarning> earnings;
   final Color barColor;
 
-  _BarChartPainter({required this.data, required this.barColor});
+  _BarChartPainter({required this.earnings, required this.barColor});
 
   static const _dayNames = ['إث', 'ثلا', 'أرب', 'خمي', 'جمع', 'سبت', 'أحد'];
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (data.isEmpty) return;
+    if (earnings.isEmpty) return;
 
-    final maxAmount = data
-        .map((d) => (d['amount'] as num?)?.toDouble() ?? 0)
+    final maxAmount = earnings
+        .map((d) => d.amount)
         .reduce((a, b) => a > b ? a : b);
 
     if (maxAmount == 0) return;
 
     const labelHeight = 24.0;
     final chartHeight = size.height - labelHeight;
-    final barWidth = (size.width / data.length) * 0.6;
-    final gap = (size.width / data.length) * 0.4;
+    final barWidth = (size.width / earnings.length) * 0.6;
+    final gap = (size.width / earnings.length) * 0.4;
 
     final barPaint = Paint()
       ..color = barColor
@@ -454,9 +453,9 @@ class _BarChartPainter extends CustomPainter {
       textDirection: TextDirection.rtl,
     );
 
-    for (int i = 0; i < data.length; i++) {
-      final amount = (data[i]['amount'] as num?)?.toDouble() ?? 0;
-      final date = data[i]['date'] as DateTime?;
+    for (int i = 0; i < earnings.length; i++) {
+      final amount = earnings[i].amount;
+      final date = earnings[i].date;
       final barHeight = (amount / maxAmount) * chartHeight * 0.85;
 
       final left = i * (barWidth + gap) + gap / 2;
@@ -479,7 +478,7 @@ class _BarChartPainter extends CustomPainter {
       }
 
       // Day label
-      if (date != null) {
+      {
         final dayName = _dayNames[(date.weekday - 1) % 7];
         textPainter.text = TextSpan(
           text: dayName,
@@ -502,5 +501,5 @@ class _BarChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BarChartPainter old) =>
-      old.data != data || old.barColor != barColor;
+      old.earnings != earnings || old.barColor != barColor;
 }

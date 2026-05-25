@@ -97,9 +97,16 @@ class ProfileScreen extends ConsumerWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          ...List.generate(5, (i) => Icon(i < 4 ? Icons.star : Icons.star_half, color: Colors.amber, size: 18)),
+                          ...List.generate(5, (i) {
+                            final r = user?.rating ?? 0;
+                            return Icon(
+                              i < r.floor() ? Icons.star : (i < r && r - i >= 0.5) ? Icons.star_half : Icons.star_border,
+                              color: Colors.amber,
+                              size: 18,
+                            );
+                          }),
                           const SizedBox(width: 6),
-                          const Text('4.8', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          Text('${(user?.rating ?? 0).toStringAsFixed(1)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ],
@@ -115,9 +122,9 @@ class ProfileScreen extends ConsumerWidget {
                     children: [
                       _StatCard(icon: Icons.directions_car, label: 'الرحلات', value: '${user?.totalRides ?? 0}'),
                       const SizedBox(width: 12),
-                      _StatCard(icon: Icons.calendar_today, label: 'عضو منذ', value: '2024'),
+                      _StatCard(icon: Icons.calendar_today, label: 'عضو منذ', value: '${user?.createdAt.year ?? 2024}'),
                       const SizedBox(width: 12),
-                      _StatCard(icon: Icons.star, label: 'التقييم', value: '4.8'),
+                      _StatCard(icon: Icons.star, label: 'التقييم', value: '${(user?.rating ?? 0).toStringAsFixed(1)}'),
                     ],
                   ),
                 ),
