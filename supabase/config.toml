@@ -1,0 +1,193 @@
+# =============================================================
+# Supabase Local Development Configuration
+# wedit - Ride-hailing app for Addis Ababa
+# https://supabase.com/docs/guides/cli/config
+# =============================================================
+
+[project]
+# Globally unique project reference, must be URL-safe (a-z, 0-9, -)
+id = "wedit"
+
+[api]
+enabled = true
+# Port to use for the API URL
+port = 54321
+# Schemas to expose in your API. Tables, views and stored procedures in this schema will get API endpoints.
+# public and storage are always included.
+schemas = ["public", "storage", "graphql_public"]
+# Extra schemas to add to the search_path of every request
+extra_search_path = ["public", "extensions"]
+# The maximum number of rows returned from a request. Limits payload size for accidental or malicious requests.
+max_rows = 1000
+
+[api.tls]
+enabled = false
+
+[db]
+# Port to use for the local database URL
+port = 54322
+# Port used by db diff command
+shadow_port = 54320
+# The database major version to use. This has to be the same as your remote database's. Run
+# `SHOW server_version;` on your remote db to check.
+major_version = 15
+
+[db.pooler]
+enabled = false
+# Port to use for the local connection pooler
+port = 54329
+# Session mode: each client connects directly to the database.
+# Transaction mode: connection is checked out from the pool per transaction.
+pool_mode = "transaction"
+# Default size of the connection pool
+default_pool_size = 20
+# How long a client connection can remain idle before being closed
+max_client_conn = 100
+
+[realtime]
+enabled = true
+# Bind realtime via either IPv4 or IPv6. (default: IPv6)
+ip_version = "IPv6"
+# The maximum length in bytes of HTTP request headers. (default: 4096)
+max_header_length = 4096
+
+[studio]
+enabled = true
+# Port to use for Supabase Studio
+port = 54323
+# External URL of the API server that frontend connects to
+api_url = "http://127.0.0.1"
+# OpenAI API key (optional, for AI features in Studio)
+# openai_api_key = "env(OPENAI_API_KEY)"
+
+[inbucket]
+enabled = true
+# Port to use for the email testing server web interface
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+enabled = true
+# The maximum file size allowed (e.g. "5MB", "500KB")
+file_size_limit = "50MiB"
+
+[storage.image_transformation]
+enabled = true
+
+[auth]
+enabled = true
+# The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
+# in emails.
+site_url = "http://127.0.0.1:3000"
+# A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
+additional_redirect_urls = [
+  "http://localhost:3000",
+  "wedit://auth/callback",
+  "com.wedit.passenger://auth/callback",
+  "com.wedit.driver://auth/callback",
+  "com.wedit.admin://auth/callback"
+]
+# How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604800 (1 week).
+jwt_expiry = 3600
+# If disabled, the refresh token will never expire.
+enable_refresh_token_rotation = true
+# Allows session invalidation on password change (defaults to true).
+refresh_token_reuse_interval = 10
+# Allow/disallow new user signups to your project.
+enable_signup = true
+# Allow/disallow anonymous sign-ins to your project.
+enable_anonymous_sign_ins = false
+# Allow/disallow testing manual linking of accounts
+enable_manual_linking = false
+# Passwords shorter than this value will be rejected by the API.
+minimum_password_length = 8
+# Passwords that do not meet the following requirements will be rejected by the API.
+# "letters_digits" | "lower_upper_letters_digits" | "lower_upper_letters_digits_symbols"
+password_requirements = "letters_digits"
+
+[auth.email]
+# Allow/disallow new user signups via email to your project.
+enable_signup = true
+# If enabled, a user will be required to confirm any email change on both the old, and new email
+# addresses. If disabled, only the new email is required to confirm.
+double_confirm_changes = true
+# If enabled, users need to confirm their email address before signing in.
+enable_confirmations = false
+# If enabled, users will need to reauthenticate or have logged in recently to change their password.
+secure_password_change = false
+# Controls the minimum amount of time that must pass before sending another signup confirmation or
+# password reset email.
+max_frequency = "1s"
+# Number of characters used in the email OTP.
+otp_length = 6
+# Number of seconds before the email OTP expires (defaults to 1 hour).
+otp_expiry = 3600
+
+[auth.sms]
+# Allow/disallow new user signups via SMS to your project.
+enable_signup = true
+# If enabled, users need to confirm their phone number before signing in.
+enable_confirmations = false
+# Template for sending OTP to users
+template = "Your wedit OTP code is: {{ .Code }}"
+# Controls the minimum amount of time that must pass before sending another sms otp.
+max_frequency = "5s"
+
+# Use pre-defined map of phone number to OTP for testing.
+[auth.sms.test_otp]
+# "+251900000000" = "123456"
+
+[auth.sms.twilio]
+enabled = false
+account_sid  = "env(TWILIO_ACCOUNT_SID)"
+auth_token   = "env(TWILIO_AUTH_TOKEN)"
+# Format: +[country code][area code][local phone number] e.g. +16175551212
+message_service_id = "env(TWILIO_MESSAGE_SERVICE_ID)"
+
+[auth.hook.custom_access_token]
+enabled = false
+
+[auth.sessions]
+# Force log out after inactivity period (days)
+timebox = 0
+inactivity_timeout = 0
+
+[analytics]
+enabled = false
+port = 54327
+# vector port (internal)
+vector_port = 54328
+# Configure one of the supported backends: `postgres`, `bigquery`
+backend = "postgres"
+
+# Experimental features may be changed or removed at any time
+[experimental]
+# Configures Postgres storage engine to use OrioleDB (S3)
+orioledb_version = ""
+# Configures S3 import/export in Postgres
+s3_host     = "env(S3_HOST)"
+s3_region   = "env(S3_REGION)"
+s3_access_key = "env(S3_ACCESS_KEY)"
+s3_secret_key = "env(S3_SECRET_KEY)"
+
+# =============================================================
+# Edge Functions configuration
+# =============================================================
+[functions.send-notification]
+verify_jwt = false  # Called by service role and webhook triggers
+
+[functions.chapa-webhook]
+verify_jwt = false  # Called by Chapa payment gateway
+
+[functions.telebirr-webhook]
+verify_jwt = false  # Called by Telebirr payment gateway
+
+[functions.auto-renew-subscription]
+verify_jwt = false  # Called by cron job / pg_notify listener
+
+[functions.close-competition-period]
+verify_jwt = false  # Called by cron job
+
+[functions.run-raffle]
+verify_jwt = false  # Called by close-competition-period
