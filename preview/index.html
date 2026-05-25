@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wedit — معاينة التطبيق</title>
+<style>
+  :root {
+    --red: #a41c28; --green: #2c7737; --gold: #eaa128; --blue: #225da3;
+    --bg: #f5f5f5; --card: #fff; --text: #1a1a1a; --sub: #666;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; min-height:100vh; }
+
+  h1.page-title {
+    text-align:center; color:#fff; font-size:28px; padding:30px 0 10px;
+    letter-spacing:2px;
+  }
+  .subtitle { text-align:center; color:#aaa; margin-bottom:30px; font-size:14px; }
+
+  .tabs { display:flex; justify-content:center; gap:8px; margin-bottom:30px; flex-wrap:wrap; padding:0 20px; }
+  .tab {
+    background:#2a2a4a; color:#aaa; border:1px solid #444; border-radius:20px;
+    padding:8px 20px; cursor:pointer; font-size:13px; transition:all .2s;
+  }
+  .tab.active, .tab:hover { background:var(--red); color:#fff; border-color:var(--red); }
+
+  .section { display:none; }
+  .section.active { display:flex; gap:24px; flex-wrap:wrap; justify-content:center; padding:0 20px 40px; }
+
+  /* Phone frame */
+  .phone {
+    width:280px; background:#000; border-radius:40px; padding:12px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5); flex-shrink:0;
+  }
+  .phone-inner {
+    background:var(--bg); border-radius:30px; overflow:hidden;
+    height:580px; position:relative;
+  }
+  .phone-label {
+    text-align:center; color:#888; font-size:11px; margin-top:8px;
+  }
+
+  /* Status bar */
+  .status-bar {
+    background:var(--red); color:#fff; font-size:10px;
+    display:flex; justify-content:space-between; padding:4px 16px;
+  }
+
+  /* ===== PASSENGER HOME ===== */
+  .map-bg {
+    height:280px; background:linear-gradient(135deg,#c8e6c9 0%,#a5d6a7 30%,#81c784 60%,#66bb6a 100%);
+    position:relative; overflow:hidden;
+  }
+  .map-road {
+    position:absolute; background:rgba(255,255,255,.4); border-radius:4px;
+  }
+  .map-road.h { height:6px; width:100%; top:50%; left:0; }
+  .map-road.v { width:6px; height:100%; left:50%; top:0; }
+  .map-road.d1 { height:4px; width:60%; top:30%; left:20%; transform:rotate(15deg); }
+  .map-road.d2 { height:4px; width:50%; top:65%; left:10%; transform:rotate(-10deg); }
+  .driver-dot {
+    position:absolute; width:22px; height:22px; background:var(--blue);
+    border:2px solid #fff; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:11px; color:#fff; box-shadow:0 2px 6px rgba(0,0,0,.3);
+  }
+  .user-dot {
+    position:absolute; width:28px; height:28px; background:var(--red);
+    border:3px solid #fff; border-radius:50%; bottom:60px; right:100px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.4);
+  }
+  .map-appbar {
+    position:absolute; top:0; left:0; right:0;
+    background:rgba(255,255,255,.9); backdrop-filter:blur(8px);
+    display:flex; justify-content:space-between; align-items:center; padding:8px 16px;
+  }
+  .map-appbar .logo { font-weight:800; color:var(--red); font-size:18px; }
+  .map-fab {
+    position:absolute; bottom:10px; left:10px; width:36px; height:36px;
+    background:#fff; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.2); font-size:16px;
+  }
+  .bottom-sheet {
+    position:absolute; bottom:0; left:0; right:0; background:#fff;
+    border-radius:20px 20px 0 0; padding:12px 16px 16px;
+    box-shadow:0 -4px 20px rgba(0,0,0,.1);
+  }
+  .sheet-handle { width:36px; height:4px; background:#ddd; border-radius:2px; margin:0 auto 12px; }
+  .search-bar {
+    background:#f5f5f5; border-radius:12px; padding:10px 14px;
+    color:#888; font-size:13px; display:flex; align-items:center; gap:8px; margin-bottom:12px;
+  }
+  .vehicle-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; }
+  .v-chip {
+    background:#fff; border:1.5px solid #eee; border-radius:12px;
+    padding:6px 10px; font-size:11px; white-space:nowrap; text-align:center;
+    min-width:60px; cursor:pointer;
+  }
+  .v-chip.selected { border-color:var(--red); background:#fff5f5; color:var(--red); }
+  .v-chip .v-icon { font-size:16px; display:block; margin-bottom:2px; }
+  .v-chip .v-price { color:#888; font-size:10px; }
+
+  /* ===== DRIVER HOME ===== */
+  .driver-map { height:320px; background:linear-gradient(135deg,#e3f2fd,#bbdefb,#90caf9); position:relative; }
+  .online-toggle {
+    position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+    background:var(--green); color:#fff; border-radius:30px; padding:12px 32px;
+    font-weight:700; font-size:15px; box-shadow:0 4px 16px rgba(44,119,55,.4);
+    display:flex; align-items:center; gap:8px;
+  }
+  .online-dot { width:10px; height:10px; background:#fff; border-radius:50%; animation:pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .driver-bottom {
+    background:#fff; padding:12px 16px;
+  }
+  .leaderboard-widget {
+    background:linear-gradient(135deg,#fff8e1,#fffde7); border:1px solid #f9a825;
+    border-radius:10px; padding:8px 12px; margin-bottom:10px;
+    display:flex; align-items:center; gap:8px; font-size:12px;
+  }
+  .earnings-row { display:flex; gap:8px; }
+  .e-card {
+    flex:1; background:#f9f9f9; border-radius:10px; padding:8px 10px; text-align:center;
+  }
+  .e-card .e-val { font-size:15px; font-weight:700; color:var(--green); }
+  .e-card .e-lbl { font-size:10px; color:#888; }
+
+  /* Ride Request Popup */
+  .ride-popup {
+    position:absolute; bottom:0; left:0; right:0; background:#fff;
+    border-radius:20px 20px 0 0; padding:16px; z-index:10;
+    box-shadow:0 -8px 30px rgba(0,0,0,.2);
+  }
+  .popup-header { color:var(--red); font-weight:700; font-size:14px; margin-bottom:10px; text-align:center; }
+  .route-row { display:flex; gap:8px; align-items:center; margin:6px 0; font-size:11px; }
+  .route-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .countdown-ring {
+    width:56px; height:56px; margin:8px auto;
+    border-radius:50%; background:conic-gradient(var(--red) 60%, #eee 0);
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+  }
+  .countdown-ring::after { content:''; position:absolute; width:44px; height:44px; background:#fff; border-radius:50%; }
+  .countdown-num { position:relative; z-index:1; font-weight:700; font-size:18px; color:var(--red); }
+  .popup-btns { display:flex; gap:8px; margin-top:10px; }
+  .btn-decline { flex:1; background:#fff; border:2px solid var(--red); color:var(--red); border-radius:10px; padding:8px; font-size:12px; font-weight:700; text-align:center; }
+  .btn-accept  { flex:2; background:var(--green); color:#fff; border-radius:10px; padding:8px; font-size:12px; font-weight:700; text-align:center; }
+
+  /* ===== LEADERBOARD ===== */
+  .lb-header { background:var(--red); color:#fff; padding:12px 16px; }
+  .lb-title { font-size:16px; font-weight:700; }
+  .lb-countdown { font-size:11px; opacity:.8; margin-top:2px; }
+  .lb-tabs { display:flex; background:#fff; border-bottom:2px solid #eee; }
+  .lb-tab { flex:1; text-align:center; padding:8px; font-size:12px; color:#888; }
+  .lb-tab.active { color:var(--red); border-bottom:2px solid var(--red); font-weight:700; margin-bottom:-2px; }
+  .lb-body { overflow-y:auto; height:420px; }
+  .rank-card {
+    background:linear-gradient(135deg,#1565C0,#0D47A1); color:#fff;
+    margin:8px; border-radius:12px; padding:12px;
+  }
+  .rank-card.gold { background:linear-gradient(135deg,#f9a825,#f57f17); }
+  .rank-num { font-size:36px; font-weight:800; }
+  .rank-sub { font-size:11px; opacity:.8; }
+  .gap-text { font-size:12px; margin-top:4px; }
+  .progress-bar { background:rgba(255,255,255,.3); border-radius:4px; height:6px; margin-top:8px; overflow:hidden; }
+  .progress-fill { background:#fff; border-radius:4px; height:100%; }
+  .lb-item {
+    display:flex; align-items:center; gap:8px; padding:8px 12px;
+    border-bottom:1px solid #f5f5f5;
+  }
+  .lb-rank { width:28px; text-align:center; font-size:18px; }
+  .lb-info { flex:1; }
+  .lb-name { font-size:13px; font-weight:600; }
+  .lb-meta { font-size:10px; color:#888; }
+  .lb-prize { font-size:12px; font-weight:700; color:var(--green); }
+  .prizes-row { display:flex; gap:6px; padding:10px 10px 0; }
+  .prize-card {
+    flex:1; background:#fff; border-radius:10px; text-align:center;
+    padding:8px 4px; box-shadow:0 1px 4px rgba(0,0,0,.08);
+    border:1px solid #f0f0f0;
+  }
+  .prize-medal { font-size:22px; }
+  .prize-amount { font-size:13px; font-weight:700; margin-top:2px; }
+  .prize-days { font-size:10px; color:var(--green); }
+
+  /* ===== ADMIN ===== */
+  .admin-wrap {
+    width:740px; background:#f0f2f5; border-radius:16px; overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.4); flex-shrink:0;
+    display:flex; height:540px;
+  }
+  .admin-sidebar {
+    width:180px; background:linear-gradient(180deg,#a41c28,#7b1219);
+    padding:16px 0; flex-shrink:0;
+  }
+  .sidebar-logo { color:#fff; font-weight:800; font-size:16px; padding:0 16px 16px; border-bottom:1px solid rgba(255,255,255,.15); }
+  .sidebar-logo span { opacity:.7; font-weight:400; font-size:11px; display:block; }
+  .nav-item {
+    display:flex; align-items:center; gap:8px; padding:10px 16px;
+    color:rgba(255,255,255,.7); font-size:12px; cursor:pointer;
+    transition:all .2s; border-right:3px solid transparent;
+  }
+  .nav-item:hover, .nav-item.active {
+    background:rgba(255,255,255,.12); color:#fff;
+    border-right-color:var(--gold);
+  }
+  .admin-content { flex:1; overflow-y:auto; padding:16px; }
+  .admin-topbar {
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;
+  }
+  .admin-topbar h2 { font-size:16px; color:#333; }
+  .kpi-row { display:flex; gap:10px; margin-bottom:14px; }
+  .kpi {
+    flex:1; background:#fff; border-radius:10px; padding:10px 12px;
+    box-shadow:0 1px 4px rgba(0,0,0,.06);
+  }
+  .kpi-icon { font-size:20px; margin-bottom:4px; }
+  .kpi-val { font-size:18px; font-weight:700; }
+  .kpi-lbl { font-size:10px; color:#888; }
+  .kpi-change { font-size:10px; color:var(--green); }
+  .chart-area {
+    background:#fff; border-radius:10px; padding:12px;
+    box-shadow:0 1px 4px rgba(0,0,0,.06); margin-bottom:12px; height:120px;
+    display:flex; align-items:flex-end; gap:6px; overflow:hidden; position:relative;
+  }
+  .chart-bar { background:var(--red); border-radius:3px 3px 0 0; flex:1; opacity:.85; }
+  .chart-bar:hover { opacity:1; }
+  .chart-label { position:absolute; top:8px; left:12px; font-size:11px; font-weight:600; color:#333; }
+  .comp-section {
+    background:#fff; border-radius:10px; padding:12px;
+    box-shadow:0 1px 4px rgba(0,0,0,.06); margin-bottom:10px;
+  }
+  .comp-section h3 { font-size:13px; font-weight:700; margin-bottom:10px; color:#333; }
+  .prize-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .prize-row label { width:70px; font-size:11px; color:#666; }
+  .prize-input {
+    background:#f5f5f5; border:1px solid #ddd; border-radius:6px;
+    padding:4px 8px; font-size:12px; width:70px; text-align:center;
+  }
+  .prize-row .etb { font-size:11px; color:#888; }
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; }
+  .toggle { width:36px; height:20px; background:var(--green); border-radius:10px; position:relative; }
+  .toggle::after { content:''; position:absolute; width:16px; height:16px; background:#fff; border-radius:50%; top:2px; right:2px; transition:.2s; }
+  .raffle-conditions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .cond-badge {
+    background:#e3f2fd; color:var(--blue); border-radius:8px;
+    padding:4px 10px; font-size:11px; font-weight:600;
+  }
+  .cond-badge.or { background:#e8f5e9; color:var(--green); }
+  .winner-row { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f5f5f5; font-size:11px; }
+  .badge-paid { background:#e8f5e9; color:var(--green); border-radius:6px; padding:2px 8px; font-size:10px; }
+  .badge-pending { background:#fff8e1; color:var(--gold); border-radius:6px; padding:2px 8px; font-size:10px; }
+
+  /* Responsive */
+  @media(max-width:900px) {
+    .admin-wrap { width:100%; flex-direction:column; height:auto; }
+    .admin-sidebar { width:100%; display:flex; overflow-x:auto; padding:8px; }
+    .sidebar-logo { display:none; }
+    .nav-item { padding:8px 12px; white-space:nowrap; border-right:none; border-bottom:2px solid transparent; }
+    .nav-item.active, .nav-item:hover { border-bottom-color:var(--gold); border-right-color:transparent; }
+  }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">🚗 wedit — معاينة التطبيق</h1>
+<p class="subtitle">منصة نقل ركاب | أديس أبابا | Flutter + Supabase</p>
+
+<div class="tabs">
+  <div class="tab active" onclick="show('passenger')">📱 تطبيق الراكب</div>
+  <div class="tab" onclick="show('driver-home')">🚗 سائق — الرئيسية</div>
+  <div class="tab" onclick="show('driver-request')">🔔 سائق — طلب رحلة</div>
+  <div class="tab" onclick="show('leaderboard')">🏆 Leaderboard</div>
+  <div class="tab" onclick="show('admin')">🖥️ Admin Dashboard</div>
+</div>
+
+<!-- ======== PASSENGER HOME ======== -->
+<div class="section active" id="s-passenger">
+  <div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+        <div class="map-bg">
+          <div class="map-road h"></div>
+          <div class="map-road v"></div>
+          <div class="map-road d1"></div>
+          <div class="map-road d2"></div>
+          <div class="driver-dot" style="top:80px;left:60px">🚗</div>
+          <div class="driver-dot" style="top:140px;left:180px">🚗</div>
+          <div class="driver-dot" style="top:60px;left:160px">🚐</div>
+          <div class="user-dot">📍</div>
+          <div class="map-appbar">
+            <div class="logo">wedit</div>
+            <div>🔔</div>
+          </div>
+          <div class="map-fab">🎯</div>
+        </div>
+        <div class="bottom-sheet">
+          <div class="sheet-handle"></div>
+          <div class="search-bar">🔍 <span>إلى أين؟</span></div>
+          <div style="font-size:11px;color:#888;margin-bottom:8px">اختر نوع السيارة</div>
+          <div class="vehicle-chips">
+            <div class="v-chip selected">
+              <span class="v-icon">🚗</span>سيدان
+              <span class="v-price">50 ب</span>
+            </div>
+            <div class="v-chip">
+              <span class="v-icon">🚙</span>SUV
+              <span class="v-price">75 ب</span>
+            </div>
+            <div class="v-chip">
+              <span class="v-icon">⭐</span>VIP
+              <span class="v-price">120 ب</span>
+            </div>
+            <div class="v-chip">
+              <span class="v-icon">🚐</span>ميني باص
+              <span class="v-price">40 ب</span>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#aaa;margin-top:8px;text-align:center">السعر يتحدد بعروض السائقين</div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">الشاشة الرئيسية</div>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+        <div style="background:var(--red);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">←</span>
+          <span style="font-weight:700">عروض السائقين</span>
+          <span style="font-size:11px;opacity:.8;margin-right:auto">ينتهي: 4:52</span>
+        </div>
+        <div style="background:#fff8e1;padding:8px 12px;font-size:11px;display:flex;gap:6px;align-items:center">
+          <span>📍 بولي → ميركاتو</span>
+          <span style="color:#888">• 8.4 كم</span>
+        </div>
+        <!-- Offer cards -->
+        <div style="padding:8px;overflow-y:auto;height:460px">
+          <div style="background:#fff;border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,.08);border:2px solid var(--green)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <div style="width:40px;height:40px;background:#e8f5e9;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px">👤</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:13px">Ahmed M.</div>
+                <div style="font-size:11px;color:#888">⭐ 4.9 • سيدان • ***45</div>
+              </div>
+              <div style="text-align:left">
+                <div style="font-size:18px;font-weight:800;color:var(--green)">85 ب</div>
+                <div style="font-size:10px;color:#888">12 د وصول</div>
+              </div>
+            </div>
+            <div style="background:var(--green);color:#fff;border-radius:8px;padding:8px;text-align:center;font-weight:700;font-size:13px">قبول العرض ✓</div>
+          </div>
+          <div style="background:#fff;border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,.06)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:40px;height:40px;background:#e3f2fd;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px">👤</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:13px">Yonas T.</div>
+                <div style="font-size:11px;color:#888">⭐ 4.7 • SUV • ***23</div>
+              </div>
+              <div style="text-align:left">
+                <div style="font-size:18px;font-weight:800;color:#333">95 ب</div>
+                <div style="font-size:10px;color:#888">8 د وصول</div>
+              </div>
+            </div>
+          </div>
+          <div style="background:#fff;border-radius:12px;padding:12px;box-shadow:0 1px 6px rgba(0,0,0,.06)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:40px;height:40px;background:#fce4ec;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px">👤</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:13px">Dawit K.</div>
+                <div style="font-size:11px;color:#888">⭐ 4.8 • سيدان • ***78</div>
+              </div>
+              <div style="text-align:left">
+                <div style="font-size:18px;font-weight:800;color:#333">90 ب</div>
+                <div style="font-size:10px;color:#888">15 د وصول</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">عروض السائقين</div>
+  </div>
+</div>
+
+<!-- ======== DRIVER HOME ======== -->
+<div class="section" id="s-driver-home">
+  <div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+        <div class="driver-map">
+          <div class="map-road h" style="top:45%"></div>
+          <div class="map-road v" style="left:40%"></div>
+          <div style="position:absolute;top:40%;left:38%;width:28px;height:28px;background:var(--blue);border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">🚗</div>
+          <div class="map-appbar">
+            <div class="logo">wedit سائق</div>
+            <div>🔔</div>
+          </div>
+          <div class="online-toggle">
+            <div class="online-dot"></div>
+            متصل
+          </div>
+        </div>
+        <div class="driver-bottom">
+          <div class="leaderboard-widget">
+            <span style="font-size:18px">🏆</span>
+            <div>
+              <div style="font-weight:700;font-size:12px">مركزك هذا الأسبوع: <span style="color:var(--red)">#5</span></div>
+              <div style="font-size:10px;color:#888">← ينقصك 12 رحلة للمركز الأول</div>
+            </div>
+            <span style="margin-right:auto;font-size:12px;color:#aaa">←</span>
+          </div>
+          <div class="earnings-row">
+            <div class="e-card">
+              <div class="e-val">240 ب</div>
+              <div class="e-lbl">اليوم</div>
+            </div>
+            <div class="e-card">
+              <div class="e-val">1,840 ب</div>
+              <div class="e-lbl">الأسبوع</div>
+            </div>
+            <div class="e-card" style="background:#e8f5e9">
+              <div class="e-val" style="color:var(--green)">نشط</div>
+              <div class="e-lbl">اشتراكك</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">السائق متصل</div>
+  </div>
+</div>
+
+<!-- ======== RIDE REQUEST DIALOG ======== -->
+<div class="section" id="s-driver-request">
+  <div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+        <div class="driver-map" style="height:220px;filter:blur(2px)opacity(.6)">
+          <div class="map-appbar"><div class="logo">wedit سائق</div></div>
+        </div>
+        <div class="ride-popup">
+          <div class="popup-header">🔔 طلب رحلة جديد!</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <span style="font-size:24px">👤</span>
+            <div>
+              <div style="font-size:13px;font-weight:700">Sara H.</div>
+              <div style="font-size:11px;color:#888">⭐ 4.6 (42 رحلة)</div>
+            </div>
+          </div>
+          <div class="route-row">
+            <div class="route-dot" style="background:var(--green)"></div>
+            <span style="font-size:11px">بولي مول، أديس أبابا</span>
+            <span style="font-size:10px;color:#888;margin-right:auto">1.2 كم منك</span>
+          </div>
+          <div class="route-row">
+            <div class="route-dot" style="background:var(--red)"></div>
+            <span style="font-size:11px">ميكسيكو سكوير، المركز</span>
+          </div>
+          <div style="background:#f9f9f9;border-radius:8px;padding:8px;margin:8px 0;display:flex;justify-content:space-between;font-size:11px">
+            <span>السعر المقترح: <b>85 ب</b></span>
+            <span>المسافة: <b>7.2 كم</b></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin:8px 0">
+            <div style="flex:1">
+              <div style="font-size:10px;color:#666;margin-bottom:3px">سعرك (ب)</div>
+              <input type="number" value="85" style="width:100%;background:#f5f5f5;border:1.5px solid var(--red);border-radius:8px;padding:6px 10px;font-size:14px;font-weight:700;text-align:center;outline:none">
+            </div>
+            <div style="text-align:center">
+              <div class="countdown-ring">
+                <span class="countdown-num">18</span>
+              </div>
+              <div style="font-size:9px;color:#888">ثانية</div>
+            </div>
+          </div>
+          <div class="popup-btns">
+            <div class="btn-decline">رفض ✗</div>
+            <div class="btn-accept">قبول وإرسال عرض ✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">نافذة طلب رحلة (30 ث)</div>
+  </div>
+</div>
+
+<!-- ======== LEADERBOARD ======== -->
+<div class="section" id="s-leaderboard">
+  <div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+        <div class="lb-header">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="lb-title">🏆 سباق الجوائز</div>
+            <span style="font-size:18px">📤</span>
+          </div>
+          <div class="lb-countdown">⏱️ ينتهي بعد: 3أ 14س 22د</div>
+        </div>
+        <div class="lb-tabs">
+          <div class="lb-tab active">أسبوعي</div>
+          <div class="lb-tab">شهري</div>
+        </div>
+        <div class="lb-body">
+          <!-- My Rank Card -->
+          <div class="rank-card">
+            <div style="font-size:11px;opacity:.8;margin-bottom:4px">مركزك الحالي</div>
+            <div style="display:flex;align-items:flex-end;gap:6px">
+              <div class="rank-num">#5</div>
+              <div class="rank-sub" style="margin-bottom:8px">من 128 سائقاً</div>
+            </div>
+            <div class="gap-text">ينقصك 12 رحلة للمركز الأول 🏆</div>
+            <div style="font-size:11px;margin-top:4px;opacity:.8">جائزة المركز الأول: 500 ب + 7 أيام مجانية</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:22%"></div></div>
+            <div style="font-size:10px;opacity:.7;margin-top:3px">السحب: 22/25 رحلة</div>
+          </div>
+
+          <!-- Prize cards -->
+          <div class="prizes-row">
+            <div class="prize-card">
+              <div class="prize-medal">🥇</div>
+              <div style="font-size:10px;color:#888">المركز الأول</div>
+              <div class="prize-amount" style="color:#f9a825">500 ب</div>
+              <div class="prize-days">+7 أيام</div>
+            </div>
+            <div class="prize-card">
+              <div class="prize-medal">🥈</div>
+              <div style="font-size:10px;color:#888">الثاني</div>
+              <div class="prize-amount" style="color:#888">300 ب</div>
+            </div>
+            <div class="prize-card">
+              <div class="prize-medal">🥉</div>
+              <div style="font-size:10px;color:#888">الثالث</div>
+              <div class="prize-amount" style="color:#a1480b">150 ب</div>
+            </div>
+          </div>
+
+          <!-- Leaderboard List -->
+          <div style="padding:4px 0">
+            <div class="lb-item" style="background:#fff9f9">
+              <div class="lb-rank">🥇</div>
+              <div class="lb-info">
+                <div class="lb-name">Mohamed A.</div>
+                <div class="lb-meta">★ 4.9 • 62 رحلة • ***12</div>
+              </div>
+              <div class="lb-prize">500 ب</div>
+            </div>
+            <div class="lb-item">
+              <div class="lb-rank">🥈</div>
+              <div class="lb-info">
+                <div class="lb-name">Bekele T.</div>
+                <div class="lb-meta">★ 4.8 • 57 رحلة • ***67</div>
+              </div>
+              <div class="lb-prize">300 ب</div>
+            </div>
+            <div class="lb-item">
+              <div class="lb-rank">🥉</div>
+              <div class="lb-info">
+                <div class="lb-name">Tesfaye W.</div>
+                <div class="lb-meta">★ 4.9 • 54 رحلة • ***34</div>
+              </div>
+              <div class="lb-prize">150 ب</div>
+            </div>
+            <div class="lb-item"><div class="lb-rank" style="font-size:13px;font-weight:700;color:#aaa">4</div><div class="lb-info"><div class="lb-name">Girma H.</div><div class="lb-meta">★ 4.7 • 48 رحلة • ***89</div></div><div style="font-size:11px;color:#ccc">—</div></div>
+            <div class="lb-item" style="background:#f0f4ff">
+              <div class="lb-rank" style="font-size:13px;font-weight:700;color:var(--blue)">5</div>
+              <div class="lb-info">
+                <div class="lb-name" style="color:var(--blue)">أنت <span style="background:var(--blue);color:#fff;border-radius:6px;padding:1px 5px;font-size:9px">أنت</span></div>
+                <div class="lb-meta">★ 4.8 • 50 رحلة • ***45</div>
+              </div>
+              <div style="font-size:11px;color:#ccc">—</div>
+            </div>
+          </div>
+
+          <!-- Raffle -->
+          <div style="background:#f3e5f5;border:1px solid #ce93d8;border-radius:10px;margin:8px;padding:10px;font-size:12px">
+            <div style="font-weight:700;margin-bottom:6px">🎰 سحب إضافي — جائزة 1000 ب</div>
+            <div style="margin-bottom:3px">الرحلات: 22/25</div>
+            <div style="background:#e0d0e8;border-radius:3px;height:6px;overflow:hidden"><div style="background:#9c27b0;width:88%;height:100%;border-radius:3px"></div></div>
+            <div style="font-size:10px;color:#888;margin-top:4px">يكفي شرط واحد (OR): رحلات أو إحالات</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">Leaderboard السائق</div>
+  </div>
+</div>
+
+<!-- ======== ADMIN ======== -->
+<div class="section" id="s-admin">
+  <!-- Dashboard -->
+  <div>
+    <div class="admin-wrap">
+      <div class="admin-sidebar">
+        <div class="sidebar-logo">wedit <span>Admin Dashboard</span></div>
+        <div class="nav-item active">📊 لوحة التحكم</div>
+        <div class="nav-item">👥 السائقون</div>
+        <div class="nav-item">🚗 الرحلات</div>
+        <div class="nav-item">💳 الاشتراكات</div>
+        <div class="nav-item">💰 المدفوعات</div>
+        <div class="nav-item">📣 الشكاوى</div>
+        <div class="nav-item" style="color:var(--gold);border-right:3px solid var(--gold)">🏆 المسابقات</div>
+        <div class="nav-item">📢 الإشعارات</div>
+        <div class="nav-item">📊 الإحالات</div>
+        <div class="nav-item">📈 التقارير</div>
+        <div class="nav-item">⚙️ الإعدادات</div>
+      </div>
+      <div class="admin-content">
+        <div class="admin-topbar">
+          <h2>لوحة التحكم الرئيسية</h2>
+          <div style="font-size:12px;color:#888">الأحد 25 مايو 2025</div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-icon">🚗</div><div class="kpi-val">1,247</div><div class="kpi-lbl">رحلات اليوم</div><div class="kpi-change">+12% ↑</div></div>
+          <div class="kpi"><div class="kpi-icon">👤</div><div class="kpi-val">342</div><div class="kpi-lbl">سائقون الآن</div><div class="kpi-change">+5% ↑</div></div>
+          <div class="kpi"><div class="kpi-icon">💵</div><div class="kpi-val">48,200 ب</div><div class="kpi-lbl">إيرادات اليوم</div><div class="kpi-change">+8% ↑</div></div>
+          <div class="kpi"><div class="kpi-icon">📝</div><div class="kpi-val">18</div><div class="kpi-lbl">طلبات جديدة</div><div class="kpi-change" style="color:var(--red)">معلقة</div></div>
+        </div>
+        <div class="chart-area">
+          <div class="chart-label">الرحلات — آخر 7 أيام</div>
+          <div class="chart-bar" style="height:60%"></div>
+          <div class="chart-bar" style="height:45%"></div>
+          <div class="chart-bar" style="height:75%"></div>
+          <div class="chart-bar" style="height:55%"></div>
+          <div class="chart-bar" style="height:80%"></div>
+          <div class="chart-bar" style="height:65%"></div>
+          <div class="chart-bar" style="height:90%"></div>
+        </div>
+        <div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+          <div style="font-size:12px;font-weight:700;margin-bottom:8px">سائقون بانتظار الموافقة (18)</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:6px;background:#fff8e1;border-radius:8px">
+              <span style="font-size:18px">👤</span>
+              <div style="flex:1"><b>Kebede Alemu</b> — Sedan — <span style="color:#888">منذ 2 ساعة</span></div>
+              <span style="background:#e8f5e9;color:var(--green);padding:3px 8px;border-radius:6px;font-weight:700">موافقة</span>
+              <span style="background:#ffebee;color:var(--red);padding:3px 8px;border-radius:6px;font-weight:700">رفض</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:6px;background:#fff8e1;border-radius:8px">
+              <span style="font-size:18px">👤</span>
+              <div style="flex:1"><b>Meseret Tadesse</b> — VIP — <span style="color:#888">منذ 4 ساعات</span></div>
+              <span style="background:#e8f5e9;color:var(--green);padding:3px 8px;border-radius:6px;font-weight:700">موافقة</span>
+              <span style="background:#ffebee;color:var(--red);padding:3px 8px;border-radius:6px;font-weight:700">رفض</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label" style="color:#aaa;text-align:center;margin-top:8px">Dashboard</div>
+  </div>
+
+  <!-- Competitions Page -->
+  <div>
+    <div class="admin-wrap">
+      <div class="admin-sidebar">
+        <div class="sidebar-logo">wedit <span>Admin Dashboard</span></div>
+        <div class="nav-item">📊 لوحة التحكم</div>
+        <div class="nav-item">👥 السائقون</div>
+        <div class="nav-item">🚗 الرحلات</div>
+        <div class="nav-item">💳 الاشتراكات</div>
+        <div class="nav-item">💰 المدفوعات</div>
+        <div class="nav-item">📣 الشكاوى</div>
+        <div class="nav-item active">🏆 المسابقات</div>
+        <div class="nav-item">📢 الإشعارات</div>
+        <div class="nav-item">📊 الإحالات</div>
+        <div class="nav-item">📈 التقارير</div>
+        <div class="nav-item">⚙️ الإعدادات</div>
+      </div>
+      <div class="admin-content">
+        <div class="admin-topbar">
+          <h2>🏆 إعدادات المسابقات والجوائز</h2>
+        </div>
+        <div class="comp-section">
+          <h3>جوائز الترتيب الأسبوعي</h3>
+          <div class="prize-row">
+            <label>🥇 المركز 1</label>
+            <input class="prize-input" value="500"> <span class="etb">ب</span>
+            <span style="font-size:11px;color:#888;margin-right:8px">+</span>
+            <input class="prize-input" value="7"> <span class="etb">أيام</span>
+          </div>
+          <div class="prize-row">
+            <label>🥈 المركز 2</label>
+            <input class="prize-input" value="300"> <span class="etb">ب</span>
+            <span style="font-size:11px;color:#888;margin-right:8px">+</span>
+            <input class="prize-input" value="0"> <span class="etb">أيام</span>
+          </div>
+          <div class="prize-row">
+            <label>🥉 المركز 3</label>
+            <input class="prize-input" value="150"> <span class="etb">ب</span>
+            <span style="font-size:11px;color:#888;margin-right:8px">+</span>
+            <input class="prize-input" value="0"> <span class="etb">أيام</span>
+          </div>
+          <div style="text-align:left;margin-top:8px"><button style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:12px;cursor:pointer">💾 حفظ الجوائز</button></div>
+        </div>
+        <div class="comp-section">
+          <div class="toggle-row">
+            <h3>🎰 السحب الإضافي (Raffle)</h3>
+            <div class="toggle"></div>
+          </div>
+          <div style="font-size:11px;color:#666;margin:6px 0">شروط التأهل:</div>
+          <div class="raffle-conditions">
+            <div class="cond-badge">25 رحلة</div>
+            <div class="cond-badge or">OR</div>
+            <div class="cond-badge">5 إحالات ركاب</div>
+            <div class="cond-badge or">OR</div>
+            <div class="cond-badge">2 إحالات سائقين</div>
+          </div>
+          <div class="prize-row" style="margin-top:8px">
+            <label>الجائزة</label>
+            <input class="prize-input" value="1000"> <span class="etb">ب</span>
+            <span style="font-size:11px;color:#888;margin-right:8px">فائز:</span>
+            <input class="prize-input" value="1" style="width:50px">
+          </div>
+        </div>
+        <div class="comp-section">
+          <h3>سجل الفائزين</h3>
+          <div class="winner-row"><span>🥇</span> <span style="flex:1">Mohamed A. — أسبوع 12 مايو</span> <span>500 ب</span> <span class="badge-paid">مدفوع ✓</span></div>
+          <div class="winner-row"><span>🎰</span> <span style="flex:1">Yonas T. — سحب مايو</span> <span>1000 ب</span> <span class="badge-pending">معلق</span> <button style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer">دفع</button></div>
+          <div class="winner-row"><span>🥇</span> <span style="flex:1">Bekele M. — أسبوع 5 مايو</span> <span>500 ب</span> <span class="badge-paid">مدفوع ✓</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label" style="color:#aaa;text-align:center;margin-top:8px">صفحة المسابقات</div>
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('s-'+id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
