@@ -175,6 +175,22 @@ class RideNotifier extends StateNotifier<RideState> {
     );
   }
 
+  /// Accept the first driver who offered at system price.
+  /// Returns the ride if a matching offer exists, or null if still waiting.
+  Future<RideEntity?> acceptSystemPrice(
+      String rideId, List<dynamic> currentOffers) async {
+    final systemOffers = currentOffers
+        .where((o) => o.isSystemPrice == true && o.status == 'pending')
+        .toList();
+
+    if (systemOffers.isNotEmpty) {
+      return acceptOffer(systemOffers.first.id as String);
+    }
+
+    // No system-price offer yet — caller should show waiting UI
+    return null;
+  }
+
   Future<bool> cancelRide(String rideId, String reason) async {
     state = state.copyWith(isLoading: true, clearError: true);
     final result = await _repository.cancelRide(rideId, reason);

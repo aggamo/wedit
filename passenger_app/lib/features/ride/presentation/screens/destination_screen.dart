@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/ride_provider.dart';
+import '../widgets/vehicle_type_card.dart';
 
 class _PopularPlace {
   final String name;
@@ -76,11 +77,70 @@ const _popularPlaces = [
   ),
 ];
 
+// ---------------------------------------------------------------------------
+// Price breakdown model
+// ---------------------------------------------------------------------------
+
+class _PriceBreakdown {
+  final double base;
+  final double distanceFare;
+  final double timeFare;
+  final double surgeFee;
+  final double total;
+  final double surgeMultiplier;
+
+  const _PriceBreakdown({
+    required this.base,
+    required this.distanceFare,
+    required this.timeFare,
+    required this.surgeFee,
+    required this.total,
+    required this.surgeMultiplier,
+  });
+
+  bool get hasSurge => surgeMultiplier > 1.0;
+}
+
+_PriceBreakdown _calcBreakdown(
+    String vt, double distKm, double durMin, double surgeMultiplier) {
+  double base, ppk, ppm;
+  switch (vt) {
+    case 'suv':
+      base = 35; ppk = 12; ppm = 2.0;
+      break;
+    case 'vip':
+      base = 60; ppk = 20; ppm = 3.5;
+      break;
+    case 'minibus':
+      base = 20; ppk = 6;  ppm = 1.0;
+      break;
+    default: // sedan
+      base = 25; ppk = 8;  ppm = 1.5;
+  }
+  final dist   = ppk * distKm;
+  final time   = ppm * durMin;
+  final sub    = base + dist + time;
+  final surge  = sub * (surgeMultiplier - 1);
+  return _PriceBreakdown(
+    base: base,
+    distanceFare: dist,
+    timeFare: time,
+    surgeFee: surge,
+    total: sub + surge,
+    surgeMultiplier: surgeMultiplier,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
+
 class DestinationScreen extends ConsumerStatefulWidget {
   const DestinationScreen({super.key});
 
   @override
-  ConsumerState<DestinationScreen> createState() => _DestinationScreenState();
+  ConsumerState<DestinationScreen> createState() =>
+      _DestinationScreenState();
 }
 
 class _DestinationScreenState extends ConsumerState<DestinationScreen> {
@@ -99,18 +159,23 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
     setState(() {
       _filteredPlaces = _popularPlaces
           .where((p) =>
-              p.name.contains(query) || p.subtitle.toLowerCase().contains(query))
+              p.name.contains(query) ||
+              p.subtitle.toLowerCase().contains(query))
           .toList();
     });
   }
 
   void _onPlaceSelected(_PopularPlace place) {
-    _showEstimateBottomSheet(place);
+    _showEstimateSheet(place);
   }
 
-  void _showEstimateBottomSheet(_PopularPlace destination) {
+  void _showEstimateSheet(_PopularPlace destination) {
     final rnd = Random();
     final distanceKm = 2.0 + rnd.nextDouble() * 8.0;
+    // Estimate ~3 min/km in city traffic
+    final durationMin = distanceKm * 3.0;
+    // TODO: replace with real surge call once Supabase is connected
+    const surgeMultiplier = 1.0;
 
     showModalBottomSheet(
       context: context,
@@ -121,16 +186,29 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
       builder: (ctx) => _EstimateSheet(
         destination: destination,
         distanceKm: distanceKm,
+        durationMin: durationMin,
+        surgeMultiplier: surgeMultiplier,
         selectedVehicleType: _selectedVehicleType,
         onVehicleTypeChanged: (vt) =>
             setState(() => _selectedVehicleType = vt),
-        onRequestRide: () => _requestRide(destination, distanceKm),
+        onRequestRide: () =>
+            _requestRide(destination, distanceKm, surgeMultiplier),
       ),
     );
   }
 
-  Future<void> _requestRide(_PopularPlace destination, double distanceKm) async {
+  Future<void> _requestRide(
+      _PopularPlace destination, double distanceKm, double surgeMultiplier) async {
     Navigator.pop(context); // close bottom sheet
+
+    final breakdown = _calcBreakdown(
+        _selectedVehicleType, distanceKm, distanceKm * 3.0, surgeMultiplier);
+
+    // Show surge warning if needed
+    if (breakdown.hasSurge && mounted) {
+      final proceed = await _showSurgeWarning(breakdown.surgeMultiplier);
+      if (proceed != true) return;
+    }
 
     final rideNotifier = ref.read(rideStateProvider.notifier);
     final ride = await rideNotifier.requestRide(
@@ -144,7 +222,8 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
     );
 
     if (ride != null && mounted) {
-      context.go('/ride/${ride.id}/offers');
+      context.go('/ride/${ride.id}/offers',
+          extra: {'systemPrice': breakdown.total});
     } else {
       final error = ref.read(rideStateProvider).error;
       if (mounted && error != null) {
@@ -153,6 +232,44 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
         );
       }
     }
+  }
+
+  Future<bool?> _showSurgeWarning(double multiplier) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.bolt, color: Colors.orange, size: 36),
+        title: const Text('أسعار ذروة مفعّلة'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'السعر الحالي أعلى بـ ${((multiplier - 1) * 100).toStringAsFixed(0)}٪ بسبب ارتفاع الطلب.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'يمكنك الانتظار حتى تنخفض الأسعار.',
+              style:
+                  TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('انتظر'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('متابعة'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -190,7 +307,8 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() => _filteredPlaces = _popularPlaces);
+                          setState(
+                              () => _filteredPlaces = _popularPlaces);
                         },
                       )
                     : null,
@@ -201,7 +319,6 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
           Expanded(
             child: ListView(
               children: [
-                // Popular places
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 4),
@@ -216,7 +333,8 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
                 ..._filteredPlaces.map(
                   (place) => ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: AppColors.primary.withOpacity(0.1),
+                      backgroundColor:
+                          AppColors.primary.withOpacity(0.1),
                       child: Icon(place.icon,
                           color: AppColors.primary, size: 20),
                     ),
@@ -230,7 +348,6 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
 
                 const Divider(height: 24),
 
-                // Recent destinations (empty state)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 4),
@@ -252,7 +369,8 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
                         SizedBox(height: 8),
                         Text(
                           'لا توجد وجهات سابقة',
-                          style: TextStyle(color: AppColors.textHint),
+                          style:
+                              TextStyle(color: AppColors.textHint),
                         ),
                       ],
                     ),
@@ -267,9 +385,15 @@ class _DestinationScreenState extends ConsumerState<DestinationScreen> {
   }
 }
 
-class _EstimateSheet extends ConsumerWidget {
+// ---------------------------------------------------------------------------
+// Estimate sheet (bottom sheet)
+// ---------------------------------------------------------------------------
+
+class _EstimateSheet extends ConsumerStatefulWidget {
   final _PopularPlace destination;
   final double distanceKm;
+  final double durationMin;
+  final double surgeMultiplier;
   final String selectedVehicleType;
   final ValueChanged<String> onVehicleTypeChanged;
   final VoidCallback onRequestRide;
@@ -277,47 +401,53 @@ class _EstimateSheet extends ConsumerWidget {
   const _EstimateSheet({
     required this.destination,
     required this.distanceKm,
+    required this.durationMin,
+    required this.surgeMultiplier,
     required this.selectedVehicleType,
     required this.onVehicleTypeChanged,
     required this.onRequestRide,
   });
 
-  double _estimate(String vt) {
-    switch (vt) {
-      case 'suv':
-        return 75.0 + distanceKm * 18.0;
-      case 'vip':
-        return 120.0 + distanceKm * 25.0;
-      case 'minibus':
-        return 40.0 + distanceKm * 10.0;
-      default:
-        return 50.0 + distanceKm * 12.0;
-    }
+  @override
+  ConsumerState<_EstimateSheet> createState() => _EstimateSheetState();
+}
+
+class _EstimateSheetState extends ConsumerState<_EstimateSheet> {
+  late String _currentVehicleType;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentVehicleType = widget.selectedVehicleType;
+  }
+
+  void _selectVehicle(String vt) {
+    setState(() => _currentVehicleType = vt);
+    widget.onVehicleTypeChanged(vt);
   }
 
   String _vehicleName(String vt) {
     switch (vt) {
-      case 'suv':
-        return 'SUV';
-      case 'vip':
-        return 'VIP';
-      case 'minibus':
-        return 'ميني باص';
-      default:
-        return 'سيدان';
+      case 'suv':     return 'دفع رباعي';
+      case 'vip':     return 'VIP';
+      case 'minibus': return 'ميني باص';
+      default:        return 'سيدان';
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final rideState = ref.watch(rideStateProvider);
+    final breakdown = _calcBreakdown(
+        _currentVehicleType, widget.distanceKm,
+        widget.durationMin, widget.surgeMultiplier);
 
     return Padding(
       padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -334,66 +464,123 @@ class _EstimateSheet extends ConsumerWidget {
                 ),
               ),
             ),
-            Text(destination.name,
+
+            // Destination & distance
+            Text(widget.destination.name,
                 style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'المسافة: ~${distanceKm.toStringAsFixed(1)} كم',
+              'المسافة: ~${widget.distanceKm.toStringAsFixed(1)} كم  •  الوقت: ~${widget.durationMin.toStringAsFixed(0)} دقيقة',
               style: theme.textTheme.bodySmall,
             ),
-            const SizedBox(height: 16),
 
-            // Vehicle type price list
-            ...AppConstants.vehicleTypes.map((vt) {
-              final isSelected = vt == selectedVehicleType;
-              return GestureDetector(
-                onTap: () => onVehicleTypeChanged(vt),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primary.withOpacity(0.08)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.textDisabled,
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(_vehicleName(vt),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                          )),
-                      const Spacer(),
-                      Text(
-                        '~${_estimate(vt).toStringAsFixed(0)} ب',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
+            // Surge banner
+            if (breakdown.hasSurge) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade300),
                 ),
-              );
-            }),
+                child: Row(
+                  children: [
+                    const Icon(Icons.bolt,
+                        color: Colors.orange, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      'أسعار ذروة: ×${widget.surgeMultiplier.toStringAsFixed(1)}',
+                      style: const TextStyle(
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 14),
+
+            // Vehicle type cards
+            SizedBox(
+              height: 110,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: AppConstants.vehicleTypes.map((vt) {
+                  final bd = _calcBreakdown(vt, widget.distanceKm,
+                      widget.durationMin, widget.surgeMultiplier);
+                  return VehicleTypeCard(
+                    vehicleType: vt,
+                    isSelected: _currentVehicleType == vt,
+                    estimatedPrice: bd.total,
+                    onTap: () => _selectVehicle(vt),
+                  );
+                }).toList(),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // Price breakdown card
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'تفصيل السعر — ${_vehicleName(_currentVehicleType)}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 10),
+                  _PriceRow(
+                      label: 'سعر الانطلاق',
+                      amount: breakdown.base),
+                  _PriceRow(
+                      label:
+                          'المسافة (${widget.distanceKm.toStringAsFixed(1)} كم)',
+                      amount: breakdown.distanceFare),
+                  _PriceRow(
+                      label:
+                          'الوقت (~${widget.durationMin.toStringAsFixed(0)} د)',
+                      amount: breakdown.timeFare),
+                  if (breakdown.hasSurge)
+                    _PriceRow(
+                        label: 'رسوم الذروة',
+                        amount: breakdown.surgeFee,
+                        highlight: true),
+                  const Divider(height: 14),
+                  _PriceRow(
+                    label: 'المجموع المقدر',
+                    amount: breakdown.total,
+                    isBold: true,
+                  ),
+                ],
+              ),
+            ),
+
+            // Comparison row
+            const SizedBox(height: 8),
+            _ComparisonRow(
+              currentVehicle: _currentVehicleType,
+              distanceKm: widget.distanceKm,
+              durationMin: widget.durationMin,
+              surgeMultiplier: widget.surgeMultiplier,
+            ),
 
             const SizedBox(height: 16),
 
-            // Request ride button
+            // Request button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: rideState.isLoading ? null : onRequestRide,
+                onPressed: rideState.isLoading ? null : widget.onRequestRide,
                 child: rideState.isLoading
                     ? const SizedBox(
                         height: 20,
@@ -403,12 +590,91 @@ class _EstimateSheet extends ConsumerWidget {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('اطلب رحلة'),
+                    : Text(
+                        'اطلب رحلة  •  ~${breakdown.total.toStringAsFixed(0)} ب',
+                        style: const TextStyle(fontSize: 16),
+                      ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+class _PriceRow extends StatelessWidget {
+  final String label;
+  final double amount;
+  final bool isBold;
+  final bool highlight;
+
+  const _PriceRow({
+    required this.label,
+    required this.amount,
+    this.isBold = false,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      fontSize: isBold ? 14 : 13,
+      fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
+      color: highlight ? Colors.orange.shade700 : null,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: style),
+          Text('${amount.toStringAsFixed(0)} ب', style: style),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComparisonRow extends StatelessWidget {
+  final String currentVehicle;
+  final double distanceKm;
+  final double durationMin;
+  final double surgeMultiplier;
+
+  const _ComparisonRow({
+    required this.currentVehicle,
+    required this.distanceKm,
+    required this.durationMin,
+    required this.surgeMultiplier,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final others = AppConstants.vehicleTypes
+        .where((vt) => vt != currentVehicle)
+        .toList();
+
+    return Wrap(
+      spacing: 8,
+      children: others.map((vt) {
+        final bd = _calcBreakdown(vt, distanceKm, durationMin, surgeMultiplier);
+        return Chip(
+          visualDensity: VisualDensity.compact,
+          label: Text('${_vtName(vt)}: ~${bd.total.toStringAsFixed(0)} ب',
+              style: const TextStyle(fontSize: 11)),
+          backgroundColor: Colors.grey.shade100,
+        );
+      }).toList(),
+    );
+  }
+
+  String _vtName(String vt) {
+    switch (vt) {
+      case 'suv':     return 'SUV';
+      case 'vip':     return 'VIP';
+      case 'minibus': return 'ميني باص';
+      default:        return 'سيدان';
+    }
   }
 }

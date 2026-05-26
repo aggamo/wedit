@@ -8,7 +8,8 @@ import '../../domain/entities/ride_request_entity.dart';
 abstract class RideRemoteDatasource {
   Stream<List<RideRequestEntity>> streamIncomingRequests(String driverId);
   Stream<RideEntity?> streamCurrentRide(String driverId);
-  Future<void> submitOffer(String rideId, String driverId, double price);
+  Future<void> submitOffer(
+      String rideId, String driverId, double price, bool isSystemPrice);
   Future<void> declineRequest(String rideId, String driverId);
   Future<void> updateLocation(
       String driverId, double lat, double lng, double heading);
@@ -26,17 +27,32 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
 
   @override
   Stream<List<RideRequestEntity>> streamIncomingRequests(String driverId) {
-    // Stream pending ride requests that match driver's vehicle type
     return _supabase
         .from(AppConstants.rideRequestsTable)
         .stream(primaryKey: ['id'])
         .eq('status', 'pending')
-        .map((data) => data
-            .where((row) =>
-                row['expires_at'] != null &&
-                DateTime.parse(row['expires_at']).isAfter(DateTime.now()))
-            .map(_mapToRequest)
-            .toList());
+        .asyncMap((data) async {
+          final active = data.where((row) =>
+              row['expires_at'] != null &&
+              DateTime.parse(row['expires_at']).isAfter(DateTime.now()));
+
+          final requests = <RideRequestEntity>[];
+          for (final row in active) {
+            final rideId = row['id'] as String;
+            int competitorCount = 0;
+            try {
+              final countData = await _supabase
+                  .from('ride_offers')
+                  .select('id')
+                  .eq('ride_id', rideId)
+                  .eq('status', 'pending')
+                  .neq('driver_id', driverId);
+              competitorCount = (countData as List).length;
+            } catch (_) {}
+            requests.add(_mapToRequest(row, competitorCount: competitorCount));
+          }
+          return requests;
+        });
   }
 
   @override
@@ -51,23 +67,16 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
 
   @override
   Future<void> submitOffer(
-      String rideId, String driverId, double price) async {
+      String rideId, String driverId, double price, bool isSystemPrice) async {
     try {
-      // Insert driver offer
       await _supabase.from('ride_offers').insert({
         'ride_id': rideId,
         'driver_id': driverId,
-        'price': price,
+        'offered_price': price,
+        'is_system_price': isSystemPrice,
         'status': 'pending',
         'created_at': DateTime.now().toIso8601String(),
       });
-
-      // Update ride request to show driver has responded
-      await _supabase.from(AppConstants.rideRequestsTable).update({
-        'driver_id': driverId,
-        'driver_price': price,
-        'status': 'offer_sent',
-      }).eq('id', rideId);
     } on PostgrestException catch (e) {
       throw ServerFailure(e.message);
     } catch (e) {
@@ -251,7 +260,8 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
     }
   }
 
-  RideRequestEntity _mapToRequest(Map<String, dynamic> data) {
+  RideRequestEntity _mapToRequest(Map<String, dynamic> data,
+      {int competitorCount = 0}) {
     return RideRequestEntity(
       rideId: data['id'] as String,
       passengerId: data['passenger_id'] as String? ?? '',
@@ -268,7 +278,8 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
       distanceKm: (data['distance_km'] as num?)?.toDouble() ?? 0,
       expiresAt: data['expires_at'] != null
           ? DateTime.parse(data['expires_at'] as String)
-          : DateTime.now().add(const Duration(seconds: 30)),
+          : DateTime.now().add(const Duration(seconds: 45)),
+      competitorCount: competitorCount,
     );
   }
 

@@ -28,9 +28,9 @@ class RideRepositoryImpl implements RideRepository {
 
   @override
   Future<Either<Failure, void>> submitOffer(
-      String rideId, double price) async {
+      String rideId, double price, {bool isSystemPrice = false}) async {
     try {
-      await _datasource.submitOffer(rideId, _driverId, price);
+      await _datasource.submitOffer(rideId, _driverId, price, isSystemPrice);
       return const Right(null);
     } on Failure catch (f) {
       return Left(f);

@@ -8,7 +8,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/ride_provider.dart';
-import '../widgets/vehicle_type_chip.dart';
+import '../widgets/vehicle_type_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -243,13 +243,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Vehicle type chips
+                    // Vehicle type cards (horizontal scrollable)
                     SizedBox(
-                      height: 90,
+                      height: 110,
                       child: ListView(
                         scrollDirection: Axis.horizontal,
                         children: AppConstants.vehicleTypes.map((vt) {
-                          return VehicleTypeChip(
+                          return VehicleTypeCard(
                             vehicleType: vt,
                             isSelected: _selectedVehicleType == vt,
                             estimatedPrice: _basePrice(vt),

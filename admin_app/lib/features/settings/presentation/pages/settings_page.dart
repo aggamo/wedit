@@ -21,6 +21,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _saving = false;
   bool _saved = false;
 
+  // ── Surge pricing ────────────────────────────────────────────────────────────
+  bool _surgeEnabled = false;
+  bool _surgeSaving = false;
+  final _surgeMultiplierCtrl = TextEditingController(text: '1.5');
+  final _surgeFromCtrl = TextEditingController();
+  final _surgeUntilCtrl = TextEditingController();
+  final _surgeNameCtrl = TextEditingController(text: 'ذروة طارئة');
+
+  // ── Fixed hour surge rules ───────────────────────────────────────────────────
+  final _fixedRules = <Map<String, dynamic>>[
+    {'name': 'ذروة الصباح',    'active': false, 'multiplier': 1.3,
+     'days': [0,1,2,3,4], 'from': '07:00', 'to': '09:00'},
+    {'name': 'ذروة المساء',    'active': false, 'multiplier': 1.4,
+     'days': [0,1,2,3,4], 'from': '17:00', 'to': '19:30'},
+    {'name': 'ليلة نهاية الأسبوع', 'active': false, 'multiplier': 1.2,
+     'days': [5,6], 'from': '20:00', 'to': '23:59'},
+  ];
+
   // ── Vehicle pricing ─────────────────────────────────────────────────────────
   final Map<String, TextEditingController> _basePrice = {
     'sedan': TextEditingController(text: '30'),
@@ -76,7 +94,68 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _maxDiscountEtbCtrl.dispose();
     _pointsForFreeRideCtrl.dispose();
     _maxFreeRideEtbCtrl.dispose();
+    _surgeMultiplierCtrl.dispose();
+    _surgeFromCtrl.dispose();
+    _surgeUntilCtrl.dispose();
+    _surgeNameCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _activateEmergencySurge() async {
+    setState(() => _surgeSaving = true);
+    try {
+      final mult = double.tryParse(_surgeMultiplierCtrl.text) ?? 1.5;
+      final now = DateTime.now();
+      final until = _surgeUntilCtrl.text.isNotEmpty
+          ? DateTime.tryParse(_surgeUntilCtrl.text) ??
+              now.add(const Duration(hours: 2))
+          : now.add(const Duration(hours: 2));
+
+      await ref.read(_adminSvcProvider).savePlatformSettings({
+        'surge_pricing': {
+          'type': 'manual',
+          'name': _surgeNameCtrl.text,
+          'multiplier': mult,
+          'active_from': now.toIso8601String(),
+          'active_until': until.toIso8601String(),
+          'is_active': true,
+        },
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      setState(() => _surgeEnabled = true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'تم تفعيل الذروة الطارئة ×${mult.toStringAsFixed(1)}'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _surgeSaving = false);
+    }
+  }
+
+  Future<void> _deactivateEmergencySurge() async {
+    setState(() => _surgeEnabled = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم إيقاف الذروة الطارئة'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
   }
 
   Future<void> _saveSettings() async {
@@ -171,6 +250,204 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ],
             ),
             const SizedBox(height: 24),
+
+            // ── Section 0: Surge Pricing ──────────────────────────────────────
+            _SectionCard(
+              title: 'أسعار الذروة',
+              icon: Icons.bolt,
+              color: Colors.orange.shade700,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Fixed-hour rules
+                  const Text(
+                    'قواعد الذروة الثابتة (يومية)',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._fixedRules.map((rule) => Padding(
+                        padding:
+                            const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${rule['name']}  '
+                                '(${rule['from']}–${rule['to']})  '
+                                '×${(rule['multiplier'] as double).toStringAsFixed(1)}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            Switch(
+                              value: rule['active'] as bool,
+                              activeColor: Colors.orange,
+                              onChanged: (v) =>
+                                  setState(() => rule['active'] = v),
+                            ),
+                          ],
+                        ),
+                      )),
+
+                  const Divider(height: 24),
+
+                  // Emergency surge
+                  const Text(
+                    'ذروة طارئة / يدوية',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  const SizedBox(height: 10),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth > 500;
+                      return isWide
+                          ? Row(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _surgeNameCtrl,
+                                    decoration:
+                                        const InputDecoration(
+                                      labelText: 'اسم الذروة',
+                                      isDense: true,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  width: 110,
+                                  child: TextFormField(
+                                    controller:
+                                        _surgeMultiplierCtrl,
+                                    keyboardType:
+                                        const TextInputType
+                                            .numberWithOptions(
+                                                decimal: true),
+                                    decoration:
+                                        const InputDecoration(
+                                      labelText: 'المضاعف',
+                                      suffixText: 'x',
+                                      isDense: true,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _surgeUntilCtrl,
+                                    decoration:
+                                        const InputDecoration(
+                                      labelText:
+                                          'تنتهي (ISO أو فارغ=2 ساعة)',
+                                      isDense: true,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                TextFormField(
+                                  controller: _surgeNameCtrl,
+                                  decoration:
+                                      const InputDecoration(
+                                          labelText: 'اسم الذروة'),
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller:
+                                      _surgeMultiplierCtrl,
+                                  keyboardType:
+                                      const TextInputType
+                                          .numberWithOptions(
+                                              decimal: true),
+                                  decoration:
+                                      const InputDecoration(
+                                    labelText: 'المضاعف',
+                                    suffixText: 'x',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _surgeUntilCtrl,
+                                  decoration:
+                                      const InputDecoration(
+                                    labelText:
+                                        'تنتهي (ISO أو فارغ=2 ساعة)',
+                                  ),
+                                ),
+                              ],
+                            );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (!_surgeEnabled)
+                        ElevatedButton.icon(
+                          onPressed: _surgeSaving
+                              ? null
+                              : _activateEmergencySurge,
+                          icon: _surgeSaving
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white),
+                                )
+                              : const Icon(Icons.bolt, size: 18),
+                          label: const Text('تفعيل الذروة الآن'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
+                        )
+                      else ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius:
+                                BorderRadius.circular(8),
+                            border: Border.all(
+                                color: Colors.orange.shade300),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.bolt,
+                                  color: Colors.orange, size: 16),
+                              SizedBox(width: 4),
+                              Text('الذروة الطارئة مفعّلة',
+                                  style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight:
+                                          FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton.icon(
+                          onPressed: _deactivateEmergencySurge,
+                          icon: const Icon(Icons.stop, size: 16),
+                          label: const Text('إيقاف'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.error,
+                            side: const BorderSide(
+                                color: AppColors.error),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // ── Section 1: Vehicle Pricing ────────────────────────────────────
             _SectionCard(

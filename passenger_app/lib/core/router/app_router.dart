@@ -178,7 +178,10 @@ GoRouter appRouter(AppRouterRef ref) {
         name: 'rideOffers',
         builder: (context, state) {
           final rideId = state.pathParameters['id']!;
-          return RideOffersScreen(rideId: rideId);
+          final extra = state.extra as Map<String, dynamic>?;
+          final systemPrice =
+              (extra?['systemPrice'] as num?)?.toDouble() ?? 0.0;
+          return RideOffersScreen(rideId: rideId, systemPrice: systemPrice);
         },
       ),
       GoRoute(

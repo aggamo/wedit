@@ -25,7 +25,39 @@ class DriverOfferCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Padding(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: offer.isSystemPrice
+            ? const BorderSide(color: AppColors.primary, width: 1.5)
+            : BorderSide.none,
+      ),
+      child: Column(
+        children: [
+          if (offer.isSystemPrice)
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.verified, color: Colors.white, size: 14),
+                  SizedBox(width: 4),
+                  Text(
+                    'بسعر النظام',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,6 +180,8 @@ class DriverOfferCard extends StatelessWidget {
             ),
           ],
         ),
+          ),
+        ],
       ),
     );
   }

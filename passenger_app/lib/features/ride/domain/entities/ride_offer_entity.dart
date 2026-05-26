@@ -17,6 +17,7 @@ class RideOfferEntity extends Equatable {
   final double distanceToPickupKm;
   final DateTime expiresAt;
   final bool isExpired;
+  final bool isSystemPrice;
   final String status; // pending, accepted, declined, expired
 
   const RideOfferEntity({
@@ -36,6 +37,7 @@ class RideOfferEntity extends Equatable {
     required this.distanceToPickupKm,
     required this.expiresAt,
     this.isExpired = false,
+    this.isSystemPrice = false,
     this.status = 'pending',
   });
 
@@ -59,5 +61,6 @@ class RideOfferEntity extends Equatable {
         offeredPrice,
         etaMinutes,
         status,
+        isSystemPrice,
       ];
 }

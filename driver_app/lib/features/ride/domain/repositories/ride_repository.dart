@@ -7,7 +7,8 @@ import '../entities/earnings_entity.dart';
 abstract class RideRepository {
   Stream<List<RideRequestEntity>> streamIncomingRequests();
   Stream<RideEntity?> streamCurrentRide();
-  Future<Either<Failure, void>> submitOffer(String rideId, double price);
+  Future<Either<Failure, void>> submitOffer(
+      String rideId, double price, {bool isSystemPrice = false});
   Future<Either<Failure, void>> declineRequest(String rideId);
   Future<Either<Failure, void>> updateLocation(
       double lat, double lng, double heading);

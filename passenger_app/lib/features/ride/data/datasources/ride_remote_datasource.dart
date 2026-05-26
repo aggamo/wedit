@@ -166,10 +166,12 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
       vehicleType: vehicle['vehicle_type'] as String? ?? 'sedan',
       offeredPrice: (json['offered_price'] as num).toDouble(),
       etaMinutes: (json['eta_minutes'] as num?)?.toInt() ?? 5,
-      distanceToPickupKm: (json['distance_to_pickup_km'] as num?)?.toDouble() ?? 1.0,
+      distanceToPickupKm:
+          (json['distance_to_pickup_km'] as num?)?.toDouble() ?? 1.0,
       expiresAt: json['expires_at'] != null
           ? DateTime.parse(json['expires_at'] as String)
-          : DateTime.now().add(const Duration(seconds: 30)),
+          : DateTime.now().add(const Duration(seconds: 45)),
+      isSystemPrice: (json['is_system_price'] as bool?) ?? false,
       status: json['status'] as String? ?? 'pending',
     );
   }

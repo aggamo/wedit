@@ -117,13 +117,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _showRideRequest(
       BuildContext context, dynamic request) async {
     _dialogShowing = true;
-    final offeredPrice = await showRideRequestDialog(context, request);
+    final result = await showRideRequestDialog(context, request);
     _dialogShowing = false;
 
-    if (offeredPrice != null && mounted) {
+    if (result != null && mounted) {
       await ref
           .read(rideNotifierProvider.notifier)
-          .submitOffer(request.rideId, offeredPrice);
+          .submitOffer(request.rideId, result.price,
+              isSystemPrice: result.isSystemPrice);
       if (mounted) {
         context.go('/ride/${request.rideId}/navigate');
       }

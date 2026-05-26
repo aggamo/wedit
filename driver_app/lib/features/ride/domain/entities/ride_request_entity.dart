@@ -13,6 +13,7 @@ class RideRequestEntity {
   final double estimatedPrice;
   final double distanceKm;
   final DateTime expiresAt;
+  final int competitorCount;
 
   const RideRequestEntity({
     required this.rideId,
@@ -29,9 +30,10 @@ class RideRequestEntity {
     required this.estimatedPrice,
     required this.distanceKm,
     required this.expiresAt,
+    this.competitorCount = 0,
   });
 
   bool get isExpired => DateTime.now().isAfter(expiresAt);
   int get secondsRemaining =>
-      expiresAt.difference(DateTime.now()).inSeconds.clamp(0, 30);
+      expiresAt.difference(DateTime.now()).inSeconds.clamp(0, 45);
 }

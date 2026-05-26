@@ -146,14 +146,16 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   /// Submit a price offer for a ride
-  Future<void> submitOffer(String rideId, double price) async {
+  Future<void> submitOffer(String rideId, double price,
+      {bool isSystemPrice = false}) async {
     state = state.copyWith(isLoading: true, clearError: true);
-    final result = await _repository.submitOffer(rideId, price);
+    final result = await _repository.submitOffer(rideId, price,
+        isSystemPrice: isSystemPrice);
     result.fold(
       (failure) =>
           state = state.copyWith(isLoading: false, error: failure.message),
-      (_) => state = state.copyWith(
-          isLoading: false, activeRideId: rideId),
+      (_) =>
+          state = state.copyWith(isLoading: false, activeRideId: rideId),
     );
   }
 
