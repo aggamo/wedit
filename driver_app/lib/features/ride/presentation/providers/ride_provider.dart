@@ -198,6 +198,60 @@ class RideNotifier extends StateNotifier<RideState> {
     );
   }
 
+  Future<RideEntity?> startStreetHailRide({
+    required String passengerPhone,
+    required String vehicleType,
+    required double startLat,
+    required double startLng,
+    String? destination,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    final result = await _repository.startStreetHailRide(
+      passengerPhone: passengerPhone,
+      vehicleType: vehicleType,
+      startLat: startLat,
+      startLng: startLng,
+      destination: destination,
+    );
+    return result.fold(
+      (failure) {
+        state = state.copyWith(isLoading: false, error: failure.message);
+        return null;
+      },
+      (ride) {
+        state = state.copyWith(isLoading: false, activeRideId: ride.id);
+        return ride;
+      },
+    );
+  }
+
+  Future<double?> endStreetHailRide({
+    required String rideId,
+    required double endLat,
+    required double endLng,
+    required double distanceKm,
+    required double durationMinutes,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    final result = await _repository.endStreetHailRide(
+      rideId: rideId,
+      endLat: endLat,
+      endLng: endLng,
+      distanceKm: distanceKm,
+      durationMinutes: durationMinutes,
+    );
+    return result.fold(
+      (failure) {
+        state = state.copyWith(isLoading: false, error: failure.message);
+        return null;
+      },
+      (fare) {
+        state = state.copyWith(isLoading: false, activeRideId: null);
+        return fare;
+      },
+    );
+  }
+
   void clearError() => state = state.copyWith(clearError: true);
 }
 

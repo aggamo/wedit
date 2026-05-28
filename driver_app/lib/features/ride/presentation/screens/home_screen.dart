@@ -11,6 +11,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../leaderboard/presentation/widgets/leaderboard_home_widget.dart';
 import '../providers/ride_provider.dart';
 import '../widgets/ride_request_dialog.dart';
+import '../widgets/street_hail_dialog.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -110,6 +111,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _shownRequestIds.add(request.rideId);
         _showRideRequest(context, request);
         break;
+      }
+    }
+  }
+
+  Future<void> _startStreetHail(BuildContext context) async {
+    final params = await showStreetHailDialog(context);
+    if (params == null || !mounted) return;
+
+    Position? pos = _currentPosition;
+    if (pos == null) {
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        );
+      } catch (_) {}
+    }
+    if (pos == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذّر تحديد موقعك الحالي')),
+        );
+      }
+      return;
+    }
+
+    final ride = await ref.read(rideNotifierProvider.notifier).startStreetHailRide(
+          passengerPhone: params.passengerPhone,
+          vehicleType: params.vehicleType,
+          startLat: pos.latitude,
+          startLng: pos.longitude,
+          destination: params.destination,
+        );
+
+    if (ride != null && mounted) {
+      context.go('/street-hail/${ride.id}', extra: {
+        'passengerPhone': params.passengerPhone,
+        'vehicleType': params.vehicleType,
+        'startLat': pos.latitude,
+        'startLng': pos.longitude,
+      });
+    } else {
+      final err = ref.read(rideNotifierProvider).error;
+      if (mounted && err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err)),
+        );
       }
     }
   }
@@ -306,6 +353,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 }
               },
               child: const Icon(Icons.my_location, color: Colors.grey),
+            ),
+          ),
+
+          // Quick Ride (Street Hail) FAB
+          Positioned(
+            bottom: isOnline ? 340 : 160,
+            right: 16,
+            child: FloatingActionButton.extended(
+              heroTag: 'street-hail',
+              backgroundColor: AppTheme.primaryColor,
+              onPressed: () => _startStreetHail(context),
+              icon: const Icon(Icons.hail, color: Colors.white),
+              label: const Text(
+                'ركوب سريع',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         ],

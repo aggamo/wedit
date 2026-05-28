@@ -17,4 +17,20 @@ abstract class RideRepository {
   Future<Either<Failure, void>> completeRide(String rideId);
   Future<Either<Failure, void>> setOnlineStatus(bool isOnline);
   Future<Either<Failure, EarningsEntity>> getEarnings(String period);
+
+  Future<Either<Failure, RideEntity>> startStreetHailRide({
+    required String passengerPhone,
+    required String vehicleType,
+    required double startLat,
+    required double startLng,
+    String? destination,
+  });
+
+  Future<Either<Failure, double>> endStreetHailRide({
+    required String rideId,
+    required double endLat,
+    required double endLng,
+    required double distanceKm,
+    required double durationMinutes,
+  });
 }

@@ -20,6 +20,7 @@ class RideEntity {
   final double? driverLat;
   final double? driverLng;
   final double? driverHeading;
+  final String rideType; // 'app_request' | 'street_hail'
 
   const RideEntity({
     required this.id,
@@ -43,6 +44,7 @@ class RideEntity {
     this.driverLat,
     this.driverLng,
     this.driverHeading,
+    this.rideType = 'app_request',
   });
 
   bool get isAccepted => status == 'accepted';
@@ -50,6 +52,7 @@ class RideEntity {
   bool get isInProgress => status == 'in_progress';
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled';
+  bool get isStreetHail => rideType == 'street_hail';
 
   bool get isActive =>
       status == 'accepted' ||

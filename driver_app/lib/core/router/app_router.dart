@@ -19,6 +19,7 @@ import '../../features/leaderboard/presentation/screens/leaderboard_screen.dart'
 import '../../features/ride/presentation/screens/navigation_screen.dart';
 import '../../features/ride/presentation/screens/ride_in_progress_screen.dart';
 import '../../features/preferred_destination/presentation/screens/preferred_destination_screen.dart';
+import '../../features/ride/presentation/screens/street_hail_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -139,6 +140,21 @@ GoRouter appRouter(Ref ref) {
         builder: (context, state) {
           final rideId = state.pathParameters['id']!;
           return RideInProgressScreen(rideId: rideId);
+        },
+      ),
+      GoRoute(
+        path: '/street-hail/:id',
+        name: 'street-hail',
+        builder: (context, state) {
+          final rideId = state.pathParameters['id']!;
+          final extra = state.extra as Map<String, dynamic>;
+          return StreetHailScreen(
+            rideId: rideId,
+            passengerPhone: extra['passengerPhone'] as String,
+            vehicleType: extra['vehicleType'] as String,
+            startLat: extra['startLat'] as double,
+            startLng: extra['startLng'] as double,
+          );
         },
       ),
     ],

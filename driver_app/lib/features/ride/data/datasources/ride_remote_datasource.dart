@@ -18,6 +18,22 @@ abstract class RideRemoteDatasource {
   Future<void> completeRide(String rideId, String driverId);
   Future<void> setOnlineStatus(String driverId, bool isOnline);
   Future<EarningsEntity> getEarnings(String driverId, String period);
+  Future<RideEntity> startStreetHailRide({
+    required String driverId,
+    required String passengerPhone,
+    required String vehicleType,
+    required double startLat,
+    required double startLng,
+    String? destination,
+  });
+  Future<double> endStreetHailRide({
+    required String rideId,
+    required String driverId,
+    required double endLat,
+    required double endLng,
+    required double distanceKm,
+    required double durationMinutes,
+  });
 }
 
 class RideRemoteDatasourceImpl implements RideRemoteDatasource {
@@ -260,6 +276,142 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
     }
   }
 
+  @override
+  Future<RideEntity> startStreetHailRide({
+    required String driverId,
+    required String passengerPhone,
+    required String vehicleType,
+    required double startLat,
+    required double startLng,
+    String? destination,
+  }) async {
+    try {
+      // Fetch driver's vehicle plate for SMS
+      String plateNumber = '';
+      String driverName = '';
+      try {
+        final driverData = await _supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', driverId)
+            .maybeSingle();
+        driverName = driverData?['full_name'] as String? ?? '';
+
+        final vehicleData = await _supabase
+            .from('vehicles')
+            .select('plate')
+            .eq('driver_id', driverId)
+            .eq('is_active', true)
+            .maybeSingle();
+        plateNumber = vehicleData?['plate'] as String? ?? '';
+      } catch (_) {}
+
+      final now = DateTime.now().toIso8601String();
+
+      final rideData = await _supabase.from(AppConstants.ridesTable).insert({
+        'driver_id':       driverId,
+        'passenger_id':    driverId, // self-reference; no app passenger
+        'passenger_name':  passengerPhone,
+        'passenger_phone': passengerPhone,
+        'pickup_lat':      startLat,
+        'pickup_lng':      startLng,
+        'pickup_address':  'شارع — موقع GPS',
+        'dropoff_lat':     startLat,
+        'dropoff_lng':     startLng,
+        'dropoff_address': destination ?? '',
+        'vehicle_type':    vehicleType,
+        'ride_type':       'street_hail',
+        'status':          'in_progress',
+        'payment_method':  'cash',
+        'agreed_price':    0,
+        'started_at':      now,
+        'created_at':      now,
+      }).select().single();
+
+      // Fire-and-forget SMS (ride_start)
+      if (driverName.isNotEmpty && plateNumber.isNotEmpty) {
+        _supabase.functions.invoke('send-sms', body: {
+          'ride_id':      rideData['id'],
+          'message_type': 'ride_start',
+          'phone_number': passengerPhone,
+          'driver_name':  driverName,
+          'plate_number': plateNumber,
+        }).ignore();
+      }
+
+      return _mapToRide(rideData);
+    } on PostgrestException catch (e) {
+      throw ServerFailure(e.message);
+    } catch (e) {
+      if (e is ServerFailure) rethrow;
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<double> endStreetHailRide({
+    required String rideId,
+    required String driverId,
+    required double endLat,
+    required double endLng,
+    required double distanceKm,
+    required double durationMinutes,
+  }) async {
+    try {
+      // Retrieve original ride for fare calculation
+      final original = await _supabase
+          .from(AppConstants.ridesTable)
+          .select('vehicle_type, passenger_phone, started_at')
+          .eq('id', rideId)
+          .single();
+
+      final vehicleType = original['vehicle_type'] as String? ?? 'sedan';
+      final passengerPhone = original['passenger_phone'] as String? ?? '';
+
+      // Calculate final fare
+      double base, ppk, ppm;
+      switch (vehicleType) {
+        case 'suv':     base = 35; ppk = 12; ppm = 2.0; break;
+        case 'vip':     base = 60; ppk = 20; ppm = 3.5; break;
+        case 'minibus': base = 20; ppk = 6;  ppm = 1.0; break;
+        default:        base = 25; ppk = 8;  ppm = 1.5;
+      }
+      final fare =
+          (base + ppk * distanceKm + ppm * durationMinutes).roundToDouble();
+
+      final now = DateTime.now().toIso8601String();
+
+      await _supabase.from(AppConstants.ridesTable).update({
+        'status':       'completed',
+        'agreed_price': fare,
+        'final_price':  fare,
+        'dropoff_lat':  endLat,
+        'dropoff_lng':  endLng,
+        'distance_km':  distanceKm,
+        'completed_at': now,
+      }).eq('id', rideId).eq('driver_id', driverId);
+
+      // Fire-and-forget SMS (ride_end)
+      if (passengerPhone.isNotEmpty) {
+        _supabase.functions.invoke('send-sms', body: {
+          'ride_id':      rideId,
+          'message_type': 'ride_end',
+          'phone_number': passengerPhone,
+          'driver_name':  '',
+          'plate_number': '',
+          'total_fare':   fare,
+        }).ignore();
+      }
+
+      return fare;
+    } on PostgrestException catch (e) {
+      throw ServerFailure(e.message);
+    } catch (e) {
+      if (e is ServerFailure) rethrow;
+      throw ServerFailure(e.toString());
+    }
+  }
+
   RideRequestEntity _mapToRequest(Map<String, dynamic> data,
       {int competitorCount = 0}) {
     return RideRequestEntity(
@@ -297,6 +449,7 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
       dropoffLng: (data['dropoff_lng'] as num?)?.toDouble() ?? 0,
       dropoffAddress: data['dropoff_address'] as String? ?? '',
       vehicleType: data['vehicle_type'] as String? ?? 'sedan',
+      rideType: data['ride_type'] as String? ?? 'app_request',
       agreedPrice: (data['agreed_price'] as num?)?.toDouble() ?? 0,
       status: data['status'] as String? ?? 'accepted',
       createdAt: data['created_at'] != null

@@ -117,4 +117,54 @@ class RideRepositoryImpl implements RideRepository {
       return Left(ServerFailure(e.toString()));
     }
   }
+
+  @override
+  Future<Either<Failure, RideEntity>> startStreetHailRide({
+    required String passengerPhone,
+    required String vehicleType,
+    required double startLat,
+    required double startLng,
+    String? destination,
+  }) async {
+    try {
+      final ride = await _datasource.startStreetHailRide(
+        driverId: _driverId,
+        passengerPhone: passengerPhone,
+        vehicleType: vehicleType,
+        startLat: startLat,
+        startLng: startLng,
+        destination: destination,
+      );
+      return Right(ride);
+    } on Failure catch (f) {
+      return Left(f);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, double>> endStreetHailRide({
+    required String rideId,
+    required double endLat,
+    required double endLng,
+    required double distanceKm,
+    required double durationMinutes,
+  }) async {
+    try {
+      final fare = await _datasource.endStreetHailRide(
+        rideId: rideId,
+        driverId: _driverId,
+        endLat: endLat,
+        endLng: endLng,
+        distanceKm: distanceKm,
+        durationMinutes: durationMinutes,
+      );
+      return Right(fare);
+    } on Failure catch (f) {
+      return Left(f);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
 }
