@@ -52,9 +52,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       return;
     }
 
-    // Check driver status
     ref.read(currentDriverProvider.future).then((driver) {
       if (!mounted) return;
+
+      // Fleet owner flow
+      if (driver != null && driver.isFleetOwner) {
+        context.go('/fleet');
+        return;
+      }
+
+      // Regular driver flow
       if (driver == null || !driver.isRegistrationComplete) {
         context.go('/registration');
       } else if (driver.isPending) {

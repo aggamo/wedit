@@ -16,6 +16,8 @@ import '../../features/competitions/presentation/pages/competitions_page.dart';
 import '../../features/referrals/presentation/pages/referrals_page.dart';
 import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/fleet_owners/presentation/pages/fleet_owners_page.dart';
+import '../../features/fleet_owners/presentation/pages/fleet_owner_detail_page.dart';
 import '../widgets/admin_scaffold.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -108,6 +110,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'settings',
                 builder: (context, state) => const SettingsPage(),
+              ),
+              GoRoute(
+                path: 'fleet-owners',
+                builder: (context, state) => const FleetOwnersPage(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) => FleetOwnerDetailPage(
+                      ownerId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

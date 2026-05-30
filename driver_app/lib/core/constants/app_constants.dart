@@ -42,6 +42,15 @@ class AppConstants {
 
   // Location update interval
   static const int locationUpdateIntervalSeconds = 10;
+  // Fleet: idle updates every 30s to save battery; 5s during active ride
+  static const int locationUpdateIdleSeconds = 30;
+  static const int locationUpdateRideSeconds = 5;
+
+  // Fleet owner tables
+  static const String fleetVehiclesTable = 'fleet_vehicles';
+  static const String fleetAssignmentsTable = 'fleet_driver_assignments';
+  static const String fleetSettlementsTable = 'fleet_settlements';
+  static const String fleetTermsVersion = '1.0';
 
   // Subscription prices (ETB)
   static const double dailyPrice = 50.0;

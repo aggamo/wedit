@@ -12,6 +12,8 @@ class DriverEntity {
   final DateTime createdAt;
   final bool hasActiveSubscription;
   final String? fcmToken;
+  final String role; // 'driver' or 'fleet_owner'
+  final bool isFleetOwner;
 
   const DriverEntity({
     required this.id,
@@ -27,6 +29,8 @@ class DriverEntity {
     required this.createdAt,
     this.hasActiveSubscription = false,
     this.fcmToken,
+    this.role = 'driver',
+    this.isFleetOwner = false,
   });
 
   bool get isPending => status == 'pending';
@@ -49,6 +53,8 @@ class DriverEntity {
     DateTime? createdAt,
     bool? hasActiveSubscription,
     String? fcmToken,
+    String? role,
+    bool? isFleetOwner,
   }) {
     return DriverEntity(
       id: id ?? this.id,
@@ -64,6 +70,8 @@ class DriverEntity {
       createdAt: createdAt ?? this.createdAt,
       hasActiveSubscription: hasActiveSubscription ?? this.hasActiveSubscription,
       fcmToken: fcmToken ?? this.fcmToken,
+      role: role ?? this.role,
+      isFleetOwner: isFleetOwner ?? this.isFleetOwner,
     );
   }
 }
