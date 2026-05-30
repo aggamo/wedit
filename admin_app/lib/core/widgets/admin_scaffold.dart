@@ -112,6 +112,12 @@ const _navItems = [
     route: '/dashboard/reports',
   ),
   _NavItem(
+    label: 'مالكو الأساطيل',
+    icon: Icons.directions_car_outlined,
+    activeIcon: Icons.directions_car,
+    route: '/dashboard/fleet-owners',
+  ),
+  _NavItem(
     label: 'الإعدادات',
     icon: Icons.settings_outlined,
     activeIcon: Icons.settings,

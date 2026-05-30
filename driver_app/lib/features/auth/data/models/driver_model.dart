@@ -15,6 +15,8 @@ class DriverModel extends DriverEntity {
     required super.createdAt,
     super.hasActiveSubscription,
     super.fcmToken,
+    super.role,
+    super.isFleetOwner,
   });
 
   factory DriverModel.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,8 @@ class DriverModel extends DriverEntity {
           : DateTime.now(),
       hasActiveSubscription: json['has_active_subscription'] as bool? ?? false,
       fcmToken: json['fcm_token'] as String?,
+      role: json['role'] as String? ?? 'driver',
+      isFleetOwner: (json['role'] as String?) == 'fleet_owner',
     );
   }
 
@@ -52,6 +56,7 @@ class DriverModel extends DriverEntity {
       'created_at': createdAt.toIso8601String(),
       'has_active_subscription': hasActiveSubscription,
       'fcm_token': fcmToken,
+      'role': role,
     };
   }
 }

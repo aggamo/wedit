@@ -20,6 +20,14 @@ import '../../features/ride/presentation/screens/navigation_screen.dart';
 import '../../features/ride/presentation/screens/ride_in_progress_screen.dart';
 import '../../features/preferred_destination/presentation/screens/preferred_destination_screen.dart';
 import '../../features/ride/presentation/screens/street_hail_screen.dart';
+import '../../features/fleet_owner/presentation/screens/fleet_terms_screen.dart';
+import '../../features/fleet_owner/presentation/screens/fleet_dashboard_screen.dart';
+import '../../features/fleet_owner/presentation/screens/fleet_vehicles_screen.dart';
+import '../../features/fleet_owner/presentation/screens/fleet_drivers_screen.dart';
+import '../../features/fleet_owner/presentation/screens/fleet_vehicle_detail_screen.dart';
+import '../../features/fleet_owner/presentation/screens/fleet_settlements_screen.dart';
+import '../../features/fleet_owner/presentation/screens/fleet_analytics_screen.dart';
+import '../../features/fleet_owner/presentation/screens/fleet_live_tracking_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -157,6 +165,60 @@ GoRouter appRouter(Ref ref) {
           );
         },
       ),
+      // Fleet owner terms
+      GoRoute(
+        path: '/fleet-terms/:role',
+        name: 'fleet-terms',
+        builder: (context, state) {
+          final role = state.pathParameters['role']!;
+          return FleetTermsScreen(userRole: role);
+        },
+      ),
+      // Fleet owner shell
+      ShellRoute(
+        builder: (context, state, child) =>
+            FleetShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/fleet',
+            name: 'fleet',
+            builder: (context, state) => const FleetDashboardScreen(),
+          ),
+          GoRoute(
+            path: '/fleet/vehicles',
+            name: 'fleet-vehicles',
+            builder: (context, state) => const FleetVehiclesScreen(),
+          ),
+          GoRoute(
+            path: '/fleet/drivers',
+            name: 'fleet-drivers',
+            builder: (context, state) => const FleetDriversScreen(),
+          ),
+          GoRoute(
+            path: '/fleet/settlements',
+            name: 'fleet-settlements',
+            builder: (context, state) => const FleetSettlementsScreen(),
+          ),
+          GoRoute(
+            path: '/fleet/analytics',
+            name: 'fleet-analytics',
+            builder: (context, state) => const FleetAnalyticsScreen(),
+          ),
+          GoRoute(
+            path: '/fleet/tracking',
+            name: 'fleet-tracking',
+            builder: (context, state) => const FleetLiveTrackingScreen(),
+          ),
+          GoRoute(
+            path: '/fleet/vehicle/:id',
+            name: 'fleet-vehicle-detail',
+            builder: (context, state) {
+              final vehicleId = state.pathParameters['id']!;
+              return FleetVehicleDetailScreen(vehicleId: vehicleId);
+            },
+          ),
+        ],
+      ),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(
@@ -206,6 +268,46 @@ class _HomeShellState extends State<HomeShell> {
           setState(() => _selectedIndex = index);
           context.go(_tabs[index].path);
         },
+        destinations: _tabs
+            .map((tab) => NavigationDestination(
+                  icon: Icon(tab.icon),
+                  label: tab.label,
+                ))
+            .toList(),
+      ),
+    );
+  }
+}
+
+class FleetShell extends StatelessWidget {
+  final Widget child;
+  const FleetShell({super.key, required this.child});
+
+  static const List<({String path, String label, IconData icon})> _tabs = [
+    (path: '/fleet', label: 'الرئيسية', icon: Icons.dashboard_rounded),
+    (path: '/fleet/vehicles', label: 'السيارات', icon: Icons.directions_car_rounded),
+    (path: '/fleet/drivers', label: 'السائقون', icon: Icons.people_rounded),
+    (path: '/fleet/settlements', label: 'التسوية', icon: Icons.account_balance_wallet_rounded),
+    (path: '/fleet/analytics', label: 'التحليل', icon: Icons.bar_chart_rounded),
+  ];
+
+  int _indexForPath(String path) {
+    for (int i = _tabs.length - 1; i >= 0; i--) {
+      if (path.startsWith(_tabs[i].path)) return i;
+    }
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentPath = GoRouterState.of(context).uri.path;
+    final selectedIndex = _indexForPath(currentPath);
+
+    return Scaffold(
+      body: child,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) => context.go(_tabs[index].path),
         destinations: _tabs
             .map((tab) => NavigationDestination(
                   icon: Icon(tab.icon),
