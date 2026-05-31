@@ -171,6 +171,12 @@ class ProfileScreen extends ConsumerWidget {
                   _MenuItem(icon: Icons.language, title: 'اللغة', onTap: () => _showLanguageDialog(context)),
                   _MenuItem(icon: Icons.notifications_outlined, title: 'الإشعارات', onTap: () {}),
                   _MenuItem(icon: Icons.help_outline, title: 'المساعدة والدعم', onTap: () {}),
+                  if (user != null && (user.isFleetOwner || user.isFleetDriver))
+                    _MenuItem(
+                      icon: Icons.gavel_outlined,
+                      title: 'القواعد والشروط — أسطول Wedit',
+                      onTap: () => context.push('/fleet/terms'),
+                    ),
                   _MenuItem(
                     icon: Icons.logout,
                     title: 'تسجيل الخروج',

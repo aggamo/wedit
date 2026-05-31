@@ -8,7 +8,9 @@ abstract class RideRepository {
   Stream<List<RideRequestEntity>> streamIncomingRequests();
   Stream<RideEntity?> streamCurrentRide();
   Future<Either<Failure, void>> submitOffer(
-      String rideId, double price, {bool isSystemPrice = false});
+      String rideId, double price,
+      {bool isSystemPrice = false, bool isSurgeOffer = false});
+  Future<Either<Failure, void>> toggleSurge(bool enabled);
   Future<Either<Failure, void>> declineRequest(String rideId);
   Future<Either<Failure, void>> updateLocation(
       double lat, double lng, double heading);

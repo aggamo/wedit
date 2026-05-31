@@ -10,21 +10,28 @@ import '../../domain/entities/ride_request_entity.dart';
 class RideOfferResult {
   final double price;
   final bool isSystemPrice;
+  final bool isSurgeOffer;
 
-  const RideOfferResult({required this.price, required this.isSystemPrice});
+  const RideOfferResult({
+    required this.price,
+    required this.isSystemPrice,
+    this.isSurgeOffer = false,
+  });
 }
 
 /// Shows the incoming ride request dialog.
 /// Returns [RideOfferResult] when driver offers/accepts, or [null] on decline/timeout.
 Future<RideOfferResult?> showRideRequestDialog(
-    BuildContext context, RideRequestEntity request) {
+    BuildContext context, RideRequestEntity request,
+    {bool surgeEnabled = false}) {
   return showModalBottomSheet<RideOfferResult>(
     context: context,
     isDismissible: false,
     enableDrag: false,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _RideRequestSheet(request: request),
+    builder: (_) =>
+        _RideRequestSheet(request: request, surgeEnabled: surgeEnabled),
   );
 }
 
@@ -32,8 +39,9 @@ enum _OfferMode { none, custom }
 
 class _RideRequestSheet extends StatefulWidget {
   final RideRequestEntity request;
+  final bool surgeEnabled;
 
-  const _RideRequestSheet({required this.request});
+  const _RideRequestSheet({required this.request, this.surgeEnabled = false});
 
   @override
   State<_RideRequestSheet> createState() => _RideRequestSheetState();
@@ -79,11 +87,18 @@ class _RideRequestSheetState extends State<_RideRequestSheet>
     super.dispose();
   }
 
+  double get _surgeMultiplier => 1.5; // Matches admin-configured value
+
+  double get _effectivePrice => widget.surgeEnabled
+      ? widget.request.estimatedPrice * _surgeMultiplier
+      : widget.request.estimatedPrice;
+
   void _acceptSystemPrice() {
     _timer?.cancel();
     Navigator.of(context).pop(RideOfferResult(
-      price: widget.request.estimatedPrice,
+      price: _effectivePrice,
       isSystemPrice: true,
+      isSurgeOffer: widget.surgeEnabled,
     ));
   }
 
@@ -95,6 +110,7 @@ class _RideRequestSheetState extends State<_RideRequestSheet>
       Navigator.of(context).pop(RideOfferResult(
         price: price,
         isSystemPrice: false,
+        isSurgeOffer: false,
       ));
     }
   }
@@ -336,22 +352,45 @@ class _RideRequestSheetState extends State<_RideRequestSheet>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
+                        color: widget.surgeEnabled
+                            ? Colors.orange.shade50
+                            : Colors.amber.shade50,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.amber.shade300),
+                        border: Border.all(
+                          color: widget.surgeEnabled
+                              ? Colors.orange.shade300
+                              : Colors.amber.shade300,
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'سعر النظام المقترح:',
-                            style: TextStyle(fontSize: 14),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.surgeEnabled
+                                    ? 'سعر الذروة 🔥:'
+                                    : 'سعر النظام المقترح:',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              if (widget.surgeEnabled)
+                                Text(
+                                  'الأساسي: ${widget.request.estimatedPrice.toStringAsFixed(0)} ب × 1.5',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.orange.shade600),
+                                ),
+                            ],
                           ),
                           Text(
-                            '${widget.request.estimatedPrice.toStringAsFixed(0)} ب',
-                            style: const TextStyle(
+                            '${_effectivePrice.toStringAsFixed(0)} ب',
+                            style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
+                              color: widget.surgeEnabled
+                                  ? Colors.orange.shade700
+                                  : Colors.black87,
                             ),
                           ),
                         ],
@@ -365,13 +404,20 @@ class _RideRequestSheetState extends State<_RideRequestSheet>
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: _acceptSystemPrice,
-                        icon: const Icon(Icons.bolt, size: 20),
-                        label: const Text(
-                          'قبول بسعر النظام (أسرع قبول)',
-                          style: TextStyle(fontSize: 15),
+                        icon: Icon(
+                          widget.surgeEnabled ? Icons.local_fire_department : Icons.bolt,
+                          size: 20,
+                        ),
+                        label: Text(
+                          widget.surgeEnabled
+                              ? 'قبول بسعر الذروة (أسرع قبول)'
+                              : 'قبول بسعر النظام (أسرع قبول)',
+                          style: const TextStyle(fontSize: 15),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.onlineColor,
+                          backgroundColor: widget.surgeEnabled
+                              ? Colors.orange
+                              : AppTheme.onlineColor,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),

@@ -12,6 +12,7 @@ import '../../../leaderboard/presentation/widgets/leaderboard_home_widget.dart';
 import '../providers/ride_provider.dart';
 import '../widgets/ride_request_dialog.dart';
 import '../widgets/street_hail_dialog.dart';
+import '../widgets/surge_toggle_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -164,14 +165,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _showRideRequest(
       BuildContext context, dynamic request) async {
     _dialogShowing = true;
-    final result = await showRideRequestDialog(context, request);
+    final isSurge = ref.read(surgeModeProvider);
+    final result = await showRideRequestDialog(context, request, surgeEnabled: isSurge);
     _dialogShowing = false;
 
     if (result != null && mounted) {
       await ref
           .read(rideNotifierProvider.notifier)
           .submitOffer(request.rideId, result.price,
-              isSystemPrice: result.isSystemPrice);
+              isSystemPrice: result.isSystemPrice,
+              isSurgeOffer: result.isSurgeOffer);
       if (mounted) {
         context.go('/ride/${request.rideId}/navigate');
       }
@@ -479,6 +482,14 @@ class _BottomInfoCard extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
+
+          // Surge toggle
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: SurgeToggleCard(),
+          ),
+
+          const SizedBox(height: 8),
 
           // Leaderboard mini widget
           Padding(

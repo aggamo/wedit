@@ -28,14 +28,26 @@ class RideRepositoryImpl implements RideRepository {
 
   @override
   Future<Either<Failure, void>> submitOffer(
-      String rideId, double price, {bool isSystemPrice = false}) async {
+      String rideId, double price,
+      {bool isSystemPrice = false, bool isSurgeOffer = false}) async {
     try {
-      await _datasource.submitOffer(rideId, _driverId, price, isSystemPrice);
+      await _datasource.submitOffer(
+          rideId, _driverId, price, isSystemPrice, isSurgeOffer);
       return const Right(null);
     } on Failure catch (f) {
       return Left(f);
     } catch (e) {
       return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> toggleSurge(bool enabled) async {
+    try {
+      await _datasource.toggleSurge(_driverId, enabled);
+      return const Right(null);
+    } catch (e) {
+      return const Right(null);
     }
   }
 

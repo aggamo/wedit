@@ -7,6 +7,7 @@ abstract class AuthRemoteDatasource {
   Future<void> sendOtp(String phone);
   Future<DriverModel> verifyOtp(String phone, String otp);
   Future<DriverModel?> getCurrentDriver();
+  Future<String?> getUserRole();
   Future<void> signOut();
   Future<void> updateFcmToken(String driverId, String token);
   Stream<DriverModel?> watchCurrentDriver(String driverId);
@@ -40,7 +41,20 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
       final userId = response.user?.id;
       if (userId == null) throw const AuthFailure('Authentication failed');
 
-      // Try to get existing driver profile
+      // Check profile role first
+      final profileData = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .maybeSingle();
+
+      final role = profileData?['role'] as String? ?? 'driver';
+
+      if (role == 'fleet_owner') {
+        return _getOrCreateFleetOwnerModel(userId, phone);
+      }
+
+      // Regular driver flow
       final driverData = await _supabase
           .from(AppConstants.driversTable)
           .select()
@@ -48,7 +62,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
           .maybeSingle();
 
       if (driverData != null) {
-        return DriverModel.fromJson(driverData);
+        return DriverModel.fromJson({...driverData, 'role': role});
       }
 
       // Create new driver profile
@@ -68,7 +82,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
           .select()
           .single();
 
-      return DriverModel.fromJson(created);
+      return DriverModel.fromJson({...created, 'role': role});
     } on AuthException catch (e) {
       throw AuthFailure(e.message);
     } catch (e) {
@@ -83,14 +97,44 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
 
+      // Get profile role
+      final profileData = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final role = profileData?['role'] as String? ?? 'driver';
+
+      if (role == 'fleet_owner') {
+        return _getOrCreateFleetOwnerModel(user.id, user.phone ?? '');
+      }
+
       final data = await _supabase
           .from(AppConstants.driversTable)
           .select()
           .eq('id', user.id)
           .maybeSingle();
 
-      return data != null ? DriverModel.fromJson(data) : null;
+      if (data == null) return null;
+      return DriverModel.fromJson({...data, 'role': role});
     } catch (e) {
+      return null;
+    }
+  }
+
+  @override
+  Future<String?> getUserRole() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+      final data = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+      return data?['role'] as String?;
+    } catch (_) {
       return null;
     }
   }
@@ -123,6 +167,45 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
         .stream(primaryKey: ['id'])
         .eq('id', driverId)
         .map((data) => data.isEmpty ? null : DriverModel.fromJson(data.first));
+  }
+
+  Future<DriverModel> _getOrCreateFleetOwnerModel(
+      String userId, String phone) async {
+    // Get fleet owner subscription status
+    final fleetData = await _supabase
+        .from('fleet_owners')
+        .select('subscription_expiry, is_active')
+        .eq('id', userId)
+        .maybeSingle();
+
+    bool hasActiveSub = false;
+    if (fleetData != null) {
+      final expiry = fleetData['subscription_expiry'] as String?;
+      if (expiry != null) {
+        hasActiveSub = DateTime.parse(expiry).isAfter(DateTime.now());
+      }
+    }
+
+    // Get profile name
+    final profileData = await _supabase
+        .from('profiles')
+        .select('full_name, phone, avatar_url, referral_code, created_at')
+        .eq('id', userId)
+        .maybeSingle();
+
+    return DriverModel(
+      id: userId,
+      phone: profileData?['phone'] as String? ?? phone,
+      name: profileData?['full_name'] as String?,
+      avatarUrl: profileData?['avatar_url'] as String?,
+      referralCode: profileData?['referral_code'] as String?,
+      status: 'active',
+      role: 'fleet_owner',
+      createdAt: profileData?['created_at'] != null
+          ? DateTime.parse(profileData!['created_at'] as String)
+          : DateTime.now(),
+      hasActiveSubscription: hasActiveSub,
+    );
   }
 
   String _generateReferralCode(String userId) {

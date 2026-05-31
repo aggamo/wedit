@@ -33,6 +33,9 @@ final rideRepositoryProvider = Provider<RideRepository>((ref) {
 /// Whether the driver is currently online (accepting rides)
 final onlineStatusProvider = StateProvider<bool>((ref) => false);
 
+/// Whether the driver has surge mode enabled
+final surgeModeProvider = StateProvider<bool>((ref) => false);
+
 // ---------------------------------------------------------------------------
 // Stream providers
 // ---------------------------------------------------------------------------
@@ -147,16 +150,21 @@ class RideNotifier extends StateNotifier<RideState> {
 
   /// Submit a price offer for a ride
   Future<void> submitOffer(String rideId, double price,
-      {bool isSystemPrice = false}) async {
+      {bool isSystemPrice = false, bool isSurgeOffer = false}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     final result = await _repository.submitOffer(rideId, price,
-        isSystemPrice: isSystemPrice);
+        isSystemPrice: isSystemPrice, isSurgeOffer: isSurgeOffer);
     result.fold(
       (failure) =>
           state = state.copyWith(isLoading: false, error: failure.message),
       (_) =>
           state = state.copyWith(isLoading: false, activeRideId: rideId),
     );
+  }
+
+  /// Toggle driver surge mode
+  Future<void> toggleSurge(bool enabled) async {
+    await _repository.toggleSurge(enabled);
   }
 
   /// Decline a ride request (just dismiss locally, log to Supabase)

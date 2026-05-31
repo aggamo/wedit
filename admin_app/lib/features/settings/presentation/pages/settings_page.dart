@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/providers/admin_provider.dart';
 import '../../../../core/services/supabase_admin_service.dart';
@@ -69,12 +70,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _pointsForFreeRideCtrl = TextEditingController(text: '500');
   final _maxFreeRideEtbCtrl = TextEditingController(text: '150');
 
+  // ── Fleet Owner Subscription Plans ──────────────────────────────────────────
+  List<Map<String, dynamic>> _fleetPlans = [];
+  bool _fleetPlansLoading = false;
+
+  // ── Legal Documents ──────────────────────────────────────────────────────────
+  Map<String, dynamic>? _activeDoc;
+  int _docAcceptanceCount = 0;
+  bool _legalDocLoading = false;
+
   static const _vehicleLabels = {
     'sedan': 'سيدان',
     'suv': 'دفع رباعي',
     'vip': 'VIP',
     'minibus': 'ميني باص',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFleetPlans();
+    _loadLegalDoc();
+  }
 
   @override
   void dispose() {
@@ -99,6 +116,286 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _surgeUntilCtrl.dispose();
     _surgeNameCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Fleet Plans helpers ──────────────────────────────────────────────────────
+  Future<void> _loadFleetPlans() async {
+    if (!mounted) return;
+    setState(() => _fleetPlansLoading = true);
+    try {
+      final data = await Supabase.instance.client
+          .from('fleet_owner_subscription_plans')
+          .select()
+          .eq('is_active', true)
+          .order('max_vehicles');
+      if (mounted) {
+        setState(() => _fleetPlans = List<Map<String, dynamic>>.from(data));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل خطط الأسطول: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _fleetPlansLoading = false);
+    }
+  }
+
+  Future<void> _toggleFleetPlanActive(
+      Map<String, dynamic> plan, bool newValue) async {
+    try {
+      await Supabase.instance.client
+          .from('fleet_owner_subscription_plans')
+          .update({'is_active': newValue})
+          .eq('id', plan['id']);
+      await _loadFleetPlans();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAddFleetPlanDialog() async {
+    final nameCtrl = TextEditingController();
+    final maxVehiclesCtrl = TextEditingController();
+    final monthlyFeeCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إضافة خطة جديدة'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'اسم الخطة'),
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'مطلوب' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: maxVehiclesCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'الحد الأقصى للمركبات',
+                  suffixText: 'مركبة',
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'مطلوب';
+                  if (int.tryParse(v) == null) return 'رقم صحيح مطلوب';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: monthlyFeeCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'الرسوم الشهرية',
+                  suffixText: 'ETB/شهر',
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'مطلوب';
+                  if (int.tryParse(v) == null) return 'رقم صحيح مطلوب';
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                await Supabase.instance.client
+                    .from('fleet_owner_subscription_plans')
+                    .insert({
+                  'name': nameCtrl.text.trim(),
+                  'max_vehicles': int.parse(maxVehiclesCtrl.text),
+                  'monthly_fee_etb': int.parse(monthlyFeeCtrl.text),
+                  'is_active': true,
+                });
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                await _loadFleetPlans();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تمت إضافة الخطة بنجاح'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('خطأ في الإضافة: $e'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('إضافة'),
+          ),
+        ],
+      ),
+    );
+
+    nameCtrl.dispose();
+    maxVehiclesCtrl.dispose();
+    monthlyFeeCtrl.dispose();
+  }
+
+  // ── Legal Documents helpers ──────────────────────────────────────────────────
+  Future<void> _loadLegalDoc() async {
+    if (!mounted) return;
+    setState(() => _legalDocLoading = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final doc = await supabase
+          .from('legal_documents')
+          .select('id, doc_type, version, title_ar, created_at')
+          .eq('is_active', true)
+          .maybeSingle();
+
+      int count = 0;
+      if (doc != null) {
+        final countResponse = await supabase
+            .from('legal_document_acceptances')
+            .select('id', const FetchOptions(count: CountOption.exact, head: true))
+            .eq('document_id', doc['id']);
+        count = countResponse.count ?? 0;
+      }
+
+      if (mounted) {
+        setState(() {
+          _activeDoc = doc;
+          _docAcceptanceCount = count;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل الوثيقة القانونية: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _legalDocLoading = false);
+    }
+  }
+
+  Future<void> _showPublishLegalDocDialog() async {
+    final versionCtrl = TextEditingController();
+    final contentCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('نشر إصدار جديد'),
+        content: SizedBox(
+          width: 500,
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: versionCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'رقم الإصدار',
+                    hintText: 'مثال: 1.0.0',
+                  ),
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'مطلوب' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: contentCtrl,
+                  maxLines: 8,
+                  decoration: const InputDecoration(
+                    labelText: 'محتوى الوثيقة (عربي)',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'مطلوب' : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                final supabase = Supabase.instance.client;
+                await supabase.from('legal_documents').insert({
+                  'version': versionCtrl.text.trim(),
+                  'content_ar': contentCtrl.text.trim(),
+                  'is_active': true,
+                });
+                await supabase
+                    .from('legal_documents')
+                    .update({'is_active': false})
+                    .neq('version', versionCtrl.text.trim());
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                await _loadLegalDoc();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تم نشر الوثيقة القانونية الجديدة بنجاح'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('خطأ في النشر: $e'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('نشر'),
+          ),
+        ],
+      ),
+    );
+
+    versionCtrl.dispose();
+    contentCtrl.dispose();
   }
 
   Future<void> _activateEmergencySurge() async {
@@ -805,6 +1102,161 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ],
                       );
               }),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Fleet Owner Subscription Plans ──────────────────────────────────────────
+            _SectionCard(
+              title: 'خطط اشتراك مالك الأسطول',
+              icon: Icons.directions_bus,
+              color: Colors.teal.shade700,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_fleetPlansLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_fleetPlans.isEmpty)
+                    const Text(
+                      'لا توجد خطط نشطة حالياً',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    )
+                  else
+                    ..._fleetPlans.map((plan) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      plan['name'] ?? '',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${plan['max_vehicles']} مركبة  ·  '
+                                      '${plan['monthly_fee_etb']} ETB/شهر',
+                                      style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: plan['is_active'] as bool? ?? true,
+                                activeColor: Colors.teal,
+                                onChanged: (v) =>
+                                    _toggleFleetPlanActive(plan, v),
+                              ),
+                            ],
+                          ),
+                        )),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _showAddFleetPlanDialog,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('إضافة خطة جديدة'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal.shade700,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Legal Documents ───────────────────────────────────────────────
+            _SectionCard(
+              title: 'الوثائق القانونية',
+              icon: Icons.gavel,
+              color: Colors.indigo.shade700,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_legalDocLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_activeDoc == null)
+                    const Text(
+                      'لا توجد وثيقة قانونية نشطة حالياً',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border:
+                            Border.all(color: Colors.indigo.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.description,
+                                  size: 16, color: Colors.indigo),
+                              const SizedBox(width: 6),
+                              Text(
+                                _activeDoc!['doc_type'] ?? '',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.indigo.shade100,
+                                  borderRadius:
+                                      BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'v${_activeDoc!['version'] ?? ''}',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.indigo,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'تاريخ الإنشاء: ${_activeDoc!['created_at'] != null ? DateTime.tryParse(_activeDoc!['created_at'].toString())?.toLocal().toString().split('.').first ?? _activeDoc!['created_at'] : '—'}',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'عدد المستخدمين الذين قبلوا الوثيقة: $_docAcceptanceCount',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _showPublishLegalDocDialog,
+                    icon: const Icon(Icons.publish, size: 18),
+                    label: const Text('نشر إصدار جديد'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo.shade700,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 

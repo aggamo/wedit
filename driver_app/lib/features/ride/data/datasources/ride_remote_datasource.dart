@@ -8,9 +8,11 @@ import '../../domain/entities/ride_request_entity.dart';
 abstract class RideRemoteDatasource {
   Stream<List<RideRequestEntity>> streamIncomingRequests(String driverId);
   Stream<RideEntity?> streamCurrentRide(String driverId);
-  Future<void> submitOffer(
-      String rideId, String driverId, double price, bool isSystemPrice);
+  Future<void> submitOffer(String rideId, String driverId, double price,
+      bool isSystemPrice, bool isSurgeOffer);
   Future<void> declineRequest(String rideId, String driverId);
+  Future<void> toggleSurge(String driverId, bool enabled);
+  Future<bool> canReceiveRequests(String driverId);
   Future<void> updateLocation(
       String driverId, double lat, double lng, double heading);
   Future<void> markArrived(String rideId, String driverId);
@@ -48,6 +50,25 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
         .stream(primaryKey: ['id'])
         .eq('status', 'pending')
         .asyncMap((data) async {
+          // Fleet driver checks: car active + daily trips limit
+          try {
+            final driverRow = await _supabase
+                .from('drivers')
+                .select('is_car_active, max_daily_trips, daily_trips_count, daily_trips_reset_at')
+                .eq('id', driverId)
+                .maybeSingle();
+            if (driverRow != null) {
+              final isCarActive = driverRow['is_car_active'] as bool? ?? true;
+              if (!isCarActive) return <RideRequestEntity>[];
+
+              final maxTrips = driverRow['max_daily_trips'] as int?;
+              final todayCount = driverRow['daily_trips_count'] as int? ?? 0;
+              if (maxTrips != null && todayCount >= maxTrips) {
+                return <RideRequestEntity>[];
+              }
+            }
+          } catch (_) {}
+
           final active = data.where((row) =>
               row['expires_at'] != null &&
               DateTime.parse(row['expires_at']).isAfter(DateTime.now()));
@@ -82,14 +103,15 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
   }
 
   @override
-  Future<void> submitOffer(
-      String rideId, String driverId, double price, bool isSystemPrice) async {
+  Future<void> submitOffer(String rideId, String driverId, double price,
+      bool isSystemPrice, bool isSurgeOffer) async {
     try {
       await _supabase.from('ride_offers').insert({
         'ride_id': rideId,
         'driver_id': driverId,
         'offered_price': price,
         'is_system_price': isSystemPrice,
+        'is_surge_offer': isSurgeOffer,
         'status': 'pending',
         'created_at': DateTime.now().toIso8601String(),
       });
@@ -97,6 +119,35 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
       throw ServerFailure(e.message);
     } catch (e) {
       throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<void> toggleSurge(String driverId, bool enabled) async {
+    try {
+      await _supabase
+          .from('drivers')
+          .update({'surge_enabled': enabled})
+          .eq('id', driverId);
+    } catch (_) {}
+  }
+
+  @override
+  Future<bool> canReceiveRequests(String driverId) async {
+    try {
+      final row = await _supabase
+          .from('drivers')
+          .select('is_car_active, max_daily_trips, daily_trips_count')
+          .eq('id', driverId)
+          .maybeSingle();
+      if (row == null) return true;
+      if (row['is_car_active'] == false) return false;
+      final max = row['max_daily_trips'] as int?;
+      final count = row['daily_trips_count'] as int? ?? 0;
+      if (max != null && count >= max) return false;
+      return true;
+    } catch (_) {
+      return true;
     }
   }
 
