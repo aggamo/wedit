@@ -16,6 +16,7 @@ import '../../features/competitions/presentation/pages/competitions_page.dart';
 import '../../features/referrals/presentation/pages/referrals_page.dart';
 import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/call_center/presentation/pages/call_center_page.dart';
 import '../widgets/admin_scaffold.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -108,6 +109,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'settings',
                 builder: (context, state) => const SettingsPage(),
+              ),
+              GoRoute(
+                path: 'call-center',
+                builder: (context, state) => const CallCenterPage(),
               ),
             ],
           ),

@@ -117,6 +117,12 @@ const _navItems = [
     activeIcon: Icons.settings,
     route: '/dashboard/settings',
   ),
+  _NavItem(
+    label: 'الكول سنتر',
+    icon: Icons.headset_mic_outlined,
+    activeIcon: Icons.headset_mic,
+    route: '/dashboard/call-center',
+  ),
 ];
 
 // ─── Top Bar ──────────────────────────────────────────────────────────────

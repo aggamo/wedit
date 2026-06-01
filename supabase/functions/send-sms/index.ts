@@ -20,7 +20,7 @@
 // Request body (JSON):
 //   {
 //     "ride_id":      "uuid",                              // optional
-//     "message_type": "ride_start" | "ride_end" | "fleet_driver_invite",
+//     "message_type": "ride_start" | "ride_end" | "fleet_driver_invite" | "call_center_dispatch",
 //     "phone_number": "+251912345678",
 //
 //     // ride_start / ride_end fields:
@@ -31,6 +31,9 @@
 //     // fleet_driver_invite fields:
 //     "is_new_user":    true | false,
 //     "temp_password":  "WD483920"                         // required if is_new_user=true
+//
+//     // call_center_dispatch fields:
+//     "custom_body":    "Wedit: طلب رحلة..."              // full SMS text
 //   }
 // =============================================================
 
@@ -226,15 +229,17 @@ serve(async (req: Request) => {
     total_fare,
     is_new_user,
     temp_password,
+    custom_body,
   } = body as {
     ride_id?:       string;
-    message_type:   "ride_start" | "ride_end" | "fleet_driver_invite";
+    message_type:   "ride_start" | "ride_end" | "fleet_driver_invite" | "call_center_dispatch";
     phone_number:   string;
     driver_name?:   string;
     plate_number?:  string;
     total_fare?:    number;
     is_new_user?:   boolean;
     temp_password?: string;
+    custom_body?:   string;
   };
 
   // ── Validate required fields ───────────────────────────────────────────────
@@ -272,6 +277,16 @@ serve(async (req: Request) => {
     );
   }
 
+  if (message_type === "call_center_dispatch" && !custom_body) {
+    return new Response(
+      JSON.stringify({ error: "custom_body required for call_center_dispatch" }),
+      {
+        status: 422,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      }
+    );
+  }
+
   // ── Build message text ─────────────────────────────────────────────────────
 
   let messageBody: string;
@@ -289,6 +304,8 @@ serve(async (req: Request) => {
       );
     }
     messageBody = buildRideEndMessage(total_fare);
+  } else if (message_type === "call_center_dispatch") {
+    messageBody = custom_body!;
   } else {
     // fleet_driver_invite
     messageBody = buildFleetDriverInviteMessage(

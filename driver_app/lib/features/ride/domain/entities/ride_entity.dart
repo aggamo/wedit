@@ -53,6 +53,7 @@ class RideEntity {
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled';
   bool get isStreetHail => rideType == 'street_hail';
+  bool get isCallCenter => rideType == 'call_center';
 
   bool get isActive =>
       status == 'accepted' ||

@@ -9,6 +9,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../leaderboard/presentation/widgets/leaderboard_home_widget.dart';
+import '../../domain/entities/ride_entity.dart';
 import '../providers/ride_provider.dart';
 import '../widgets/ride_request_dialog.dart';
 import '../widgets/street_hail_dialog.dart';
@@ -185,6 +186,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  Future<void> _showCallCenterRideDialog(
+      BuildContext context, RideEntity ride) async {
+    _dialogShowing = true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.headset_mic, color: AppTheme.primaryColor),
+            const SizedBox(width: 8),
+            const Text(
+              'طلب من الكول سنتر',
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 16),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.location_on, color: Colors.red),
+              title: Text(ride.pickupAddress,
+                  style: const TextStyle(fontFamily: 'Cairo')),
+              subtitle: const Text('موقع الراكب',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+            ),
+            if (ride.passengerPhone != null)
+              ListTile(
+                leading: const Icon(Icons.phone, color: Colors.green),
+                title: Text(ride.passengerPhone!,
+                    style: const TextStyle(fontFamily: 'Cairo')),
+                subtitle: const Text('هاتف الراكب',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('تجاهل',
+                style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('قبول الرحلة',
+                style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    _dialogShowing = false;
+    if (confirmed == true && mounted) {
+      context.go('/ride/${ride.id}/navigate');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOnline = ref.watch(onlineStatusProvider);
@@ -203,7 +264,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.listen(currentRideProvider, (_, next) {
       next.whenData((ride) {
         if (ride != null && mounted) {
-          if (ride.isAccepted || ride.isDriverArrived) {
+          if (ride.isCallCenter &&
+              (ride.isAccepted || ride.isDriverArrived) &&
+              !_shownRequestIds.contains(ride.id)) {
+            _shownRequestIds.add(ride.id);
+            _showCallCenterRideDialog(context, ride);
+          } else if (ride.isAccepted || ride.isDriverArrived) {
             if (!context.location.startsWith('/ride/')) {
               context.go('/ride/${ride.id}/navigate');
             }
