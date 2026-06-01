@@ -54,6 +54,7 @@ class RideEntity {
   bool get isCancelled => status == 'cancelled';
   bool get isStreetHail => rideType == 'street_hail';
   bool get isCallCenter => rideType == 'call_center';
+  bool get isAiCall     => rideType == 'ai_call';
 
   bool get isActive =>
       status == 'accepted' ||

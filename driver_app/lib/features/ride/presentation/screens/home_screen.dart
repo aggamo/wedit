@@ -246,6 +246,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  Future<void> _showAiCallRideDialog(
+      BuildContext context, RideEntity ride) async {
+    _dialogShowing = true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.smart_toy, color: Colors.blue.shade700),
+            const SizedBox(width: 8),
+            const Text(
+              'طلب من المساعد الصوتي',
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 15),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.location_on, color: Colors.red),
+              title: Text(ride.pickupAddress,
+                  style: const TextStyle(fontFamily: 'Cairo')),
+              subtitle: const Text('موقع الراكب',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+            ),
+            if (ride.passengerPhone != null)
+              ListTile(
+                leading: const Icon(Icons.phone, color: Colors.green),
+                title: Text(ride.passengerPhone!,
+                    style: const TextStyle(fontFamily: 'Cairo')),
+                subtitle: const Text('هاتف الراكب (اتصل للتأكيد)',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('تجاهل',
+                style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('قبول الرحلة',
+                style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    _dialogShowing = false;
+    if (confirmed == true && mounted) {
+      context.go('/ride/${ride.id}/navigate');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOnline = ref.watch(onlineStatusProvider);
@@ -269,6 +329,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               !_shownRequestIds.contains(ride.id)) {
             _shownRequestIds.add(ride.id);
             _showCallCenterRideDialog(context, ride);
+          } else if (ride.isAiCall &&
+              (ride.isAccepted || ride.isDriverArrived) &&
+              !_shownRequestIds.contains(ride.id)) {
+            _shownRequestIds.add(ride.id);
+            _showAiCallRideDialog(context, ride);
           } else if (ride.isAccepted || ride.isDriverArrived) {
             if (!context.location.startsWith('/ride/')) {
               context.go('/ride/${ride.id}/navigate');

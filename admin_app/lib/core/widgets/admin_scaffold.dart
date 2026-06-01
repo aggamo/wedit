@@ -123,6 +123,12 @@ const _navItems = [
     activeIcon: Icons.headset_mic,
     route: '/dashboard/call-center',
   ),
+  _NavItem(
+    label: 'المساعد الصوتي',
+    icon: Icons.record_voice_over_outlined,
+    activeIcon: Icons.record_voice_over,
+    route: '/dashboard/ai-call-logs',
+  ),
 ];
 
 // ─── Top Bar ──────────────────────────────────────────────────────────────

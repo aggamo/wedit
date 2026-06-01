@@ -17,6 +17,7 @@ import '../../features/referrals/presentation/pages/referrals_page.dart';
 import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/call_center/presentation/pages/call_center_page.dart';
+import '../../features/ai_call_center/presentation/pages/ai_call_logs_page.dart';
 import '../widgets/admin_scaffold.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -113,6 +114,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'call-center',
                 builder: (context, state) => const CallCenterPage(),
+              ),
+              GoRoute(
+                path: 'ai-call-logs',
+                builder: (context, state) => const AiCallLogsPage(),
               ),
             ],
           ),
