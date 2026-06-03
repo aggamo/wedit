@@ -36,6 +36,7 @@ abstract class RideRemoteDatasource {
     required double distanceKm,
     required double durationMinutes,
   });
+  Future<void> declineCallCenterRide(String rideId);
 }
 
 class RideRemoteDatasourceImpl implements RideRemoteDatasource {
