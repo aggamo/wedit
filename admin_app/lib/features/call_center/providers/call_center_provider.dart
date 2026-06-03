@@ -41,6 +41,9 @@ class CallCenterNotifier extends StateNotifier<CallCenterState> {
     required String pickupAddress,
     required String vehicleType,
     String notes = '',
+    double? dropoffLat,
+    double? dropoffLng,
+    String dropoffAddress = '',
   }) async {
     state = state.copyWith(isLoading: true, clearError: true, clearResult: true);
 
@@ -49,11 +52,14 @@ class CallCenterNotifier extends StateNotifier<CallCenterState> {
         'create-call-center-ride',
         body: {
           'passenger_phone': passengerPhone,
-          'pickup_lat': pickupLat,
-          'pickup_lng': pickupLng,
-          'pickup_address': pickupAddress,
-          'vehicle_type': vehicleType,
+          'pickup_lat':      pickupLat,
+          'pickup_lng':      pickupLng,
+          'pickup_address':  pickupAddress,
+          'vehicle_type':    vehicleType,
           if (notes.isNotEmpty) 'notes': notes,
+          if (dropoffLat != null) 'dropoff_lat': dropoffLat,
+          if (dropoffLng != null) 'dropoff_lng': dropoffLng,
+          if (dropoffAddress.isNotEmpty) 'dropoff_address': dropoffAddress,
         },
       );
 

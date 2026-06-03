@@ -20,7 +20,8 @@ class RideEntity {
   final double? driverLat;
   final double? driverLng;
   final double? driverHeading;
-  final String rideType; // 'app_request' | 'street_hail'
+  final String rideType; // 'app_request' | 'street_hail' | 'call_center' | 'ai_call'
+  final double? estimatedPrice;
 
   const RideEntity({
     required this.id,
@@ -45,6 +46,7 @@ class RideEntity {
     this.driverLng,
     this.driverHeading,
     this.rideType = 'app_request',
+    this.estimatedPrice,
   });
 
   bool get isAccepted => status == 'accepted';

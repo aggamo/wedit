@@ -513,9 +513,21 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
           ? DateTime.parse(data['completed_at'] as String)
           : null,
       passengerPhone: data['passenger_phone'] as String?,
-      driverLat: (data['driver_lat'] as num?)?.toDouble(),
-      driverLng: (data['driver_lng'] as num?)?.toDouble(),
-      driverHeading: (data['driver_heading'] as num?)?.toDouble(),
+      driverLat:      (data['driver_lat']      as num?)?.toDouble(),
+      driverLng:      (data['driver_lng']      as num?)?.toDouble(),
+      driverHeading:  (data['driver_heading']  as num?)?.toDouble(),
+      estimatedPrice: (data['estimated_price'] as num?)?.toDouble(),
     );
+  }
+
+  Future<void> declineCallCenterRide(String rideId) async {
+    try {
+      await _supabase.functions.invoke(
+        'decline-call-center-ride',
+        body: {'ride_id': rideId},
+      );
+    } catch (_) {
+      // Non-critical
+    }
   }
 }

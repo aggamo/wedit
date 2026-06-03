@@ -14,13 +14,16 @@ class CallCenterPage extends ConsumerStatefulWidget {
 }
 
 class _CallCenterPageState extends ConsumerState<CallCenterPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _phoneCtrl = TextEditingController();
-  final _addressCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
+  final _formKey         = GlobalKey<FormState>();
+  final _phoneCtrl       = TextEditingController();
+  final _addressCtrl     = TextEditingController();
+  final _destinationCtrl = TextEditingController();
+  final _notesCtrl       = TextEditingController();
 
-  String _vehicleType = 'sedan';
+  String  _vehicleType     = 'sedan';
   LatLng? _pickupLocation;
+  LatLng? _dropoffLocation;
+  bool    _addingDestination = false;
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
 
@@ -37,6 +40,7 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
   void dispose() {
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
+    _destinationCtrl.dispose();
     _notesCtrl.dispose();
     _mapController?.dispose();
     super.dispose();
@@ -44,15 +48,41 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
 
   void _onMapTap(LatLng position) {
     setState(() {
-      _pickupLocation = position;
-      _markers = {
-        Marker(
-          markerId: const MarkerId('pickup'),
-          position: position,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: const InfoWindow(title: 'موقع الراكب'),
-        ),
-      };
+      if (_addingDestination) {
+        _dropoffLocation = position;
+        _markers = {
+          if (_pickupLocation != null)
+            Marker(
+              markerId: const MarkerId('pickup'),
+              position: _pickupLocation!,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              infoWindow: const InfoWindow(title: 'موقع الراكب'),
+            ),
+          Marker(
+            markerId: const MarkerId('dropoff'),
+            position: position,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            infoWindow: const InfoWindow(title: 'الوجهة'),
+          ),
+        };
+      } else {
+        _pickupLocation = position;
+        _markers = {
+          Marker(
+            markerId: const MarkerId('pickup'),
+            position: position,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            infoWindow: const InfoWindow(title: 'موقع الراكب'),
+          ),
+          if (_dropoffLocation != null)
+            Marker(
+              markerId: const MarkerId('dropoff'),
+              position: _dropoffLocation!,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+              infoWindow: const InfoWindow(title: 'الوجهة'),
+            ),
+        };
+      }
     });
   }
 
@@ -69,12 +99,15 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
     }
 
     await ref.read(callCenterProvider.notifier).createRide(
-          passengerPhone: _phoneCtrl.text.trim(),
-          pickupLat: _pickupLocation!.latitude,
-          pickupLng: _pickupLocation!.longitude,
-          pickupAddress: _addressCtrl.text.trim(),
-          vehicleType: _vehicleType,
-          notes: _notesCtrl.text.trim(),
+          passengerPhone:  _phoneCtrl.text.trim(),
+          pickupLat:       _pickupLocation!.latitude,
+          pickupLng:       _pickupLocation!.longitude,
+          pickupAddress:   _addressCtrl.text.trim(),
+          vehicleType:     _vehicleType,
+          notes:           _notesCtrl.text.trim(),
+          dropoffLat:      _dropoffLocation?.latitude,
+          dropoffLng:      _dropoffLocation?.longitude,
+          dropoffAddress:  _destinationCtrl.text.trim(),
         );
   }
 
@@ -82,11 +115,14 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
     _formKey.currentState?.reset();
     _phoneCtrl.clear();
     _addressCtrl.clear();
+    _destinationCtrl.clear();
     _notesCtrl.clear();
     setState(() {
-      _vehicleType = 'sedan';
-      _pickupLocation = null;
-      _markers = {};
+      _vehicleType       = 'sedan';
+      _pickupLocation    = null;
+      _dropoffLocation   = null;
+      _addingDestination = false;
+      _markers           = {};
     });
     ref.read(callCenterProvider.notifier).reset();
   }
@@ -139,13 +175,18 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
                                   formKey: _formKey,
                                   phoneCtrl: _phoneCtrl,
                                   addressCtrl: _addressCtrl,
+                                  destinationCtrl: _destinationCtrl,
                                   notesCtrl: _notesCtrl,
                                   vehicleType: _vehicleType,
                                   pickupLocation: _pickupLocation,
+                                  dropoffLocation: _dropoffLocation,
+                                  addingDestination: _addingDestination,
                                   isLoading: state.isLoading,
                                   error: state.error,
                                   onVehicleTypeChanged: (v) =>
                                       setState(() => _vehicleType = v),
+                                  onToggleDestination: (v) =>
+                                      setState(() => _addingDestination = v),
                                   onSubmit: _submit,
                                 ),
                               ),
@@ -157,6 +198,7 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
                                   onMapCreated: (c) => _mapController = c,
                                   onTap: _onMapTap,
                                   pickupLocation: _pickupLocation,
+                                  addingDestination: _addingDestination,
                                 ),
                               ),
                             ],
@@ -168,6 +210,7 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
                                 onMapCreated: (c) => _mapController = c,
                                 onTap: _onMapTap,
                                 pickupLocation: _pickupLocation,
+                                addingDestination: _addingDestination,
                                 height: 300,
                               ),
                               const SizedBox(height: 16),
@@ -175,13 +218,18 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
                                 formKey: _formKey,
                                 phoneCtrl: _phoneCtrl,
                                 addressCtrl: _addressCtrl,
+                                destinationCtrl: _destinationCtrl,
                                 notesCtrl: _notesCtrl,
                                 vehicleType: _vehicleType,
                                 pickupLocation: _pickupLocation,
+                                dropoffLocation: _dropoffLocation,
+                                addingDestination: _addingDestination,
                                 isLoading: state.isLoading,
                                 error: state.error,
                                 onVehicleTypeChanged: (v) =>
                                     setState(() => _vehicleType = v),
+                                onToggleDestination: (v) =>
+                                    setState(() => _addingDestination = v),
                                 onSubmit: _submit,
                               ),
                             ],
@@ -201,24 +249,32 @@ class _FormCard extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController phoneCtrl;
   final TextEditingController addressCtrl;
+  final TextEditingController destinationCtrl;
   final TextEditingController notesCtrl;
   final String vehicleType;
   final LatLng? pickupLocation;
+  final LatLng? dropoffLocation;
+  final bool addingDestination;
   final bool isLoading;
   final String? error;
   final ValueChanged<String> onVehicleTypeChanged;
+  final ValueChanged<bool> onToggleDestination;
   final VoidCallback onSubmit;
 
   const _FormCard({
     required this.formKey,
     required this.phoneCtrl,
     required this.addressCtrl,
+    required this.destinationCtrl,
     required this.notesCtrl,
     required this.vehicleType,
     required this.pickupLocation,
+    required this.dropoffLocation,
+    required this.addingDestination,
     required this.isLoading,
     required this.error,
     required this.onVehicleTypeChanged,
+    required this.onToggleDestination,
     required this.onSubmit,
   });
 
@@ -285,6 +341,76 @@ class _FormCard extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 8),
+
+              // Destination toggle + field
+              Row(
+                children: [
+                  Switch(
+                    value: addingDestination,
+                    onChanged: onToggleDestination,
+                    activeColor: Colors.blue,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'إضافة وجهة (اختياري)',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                  ),
+                ],
+              ),
+              if (addingDestination) ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: destinationCtrl,
+                  maxLines: 2,
+                  decoration: _inputDecoration(
+                    label: 'وصف الوجهة',
+                    hint: 'مثال: ميسكل سكوير',
+                    icon: Icons.flag,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: dropoffLocation != null
+                        ? Colors.blue.shade50
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: dropoffLocation != null
+                          ? Colors.blue.shade300
+                          : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        dropoffLocation != null
+                            ? Icons.check_circle
+                            : Icons.info_outline,
+                        size: 16,
+                        color: dropoffLocation != null
+                            ? Colors.blue.shade700
+                            : Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        dropoffLocation != null
+                            ? 'تم تحديد الوجهة على الخريطة (pin أخضر)'
+                            : 'انقر على الخريطة لتحديد الوجهة (pin أخضر)',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 11,
+                          color: dropoffLocation != null
+                              ? Colors.blue.shade800
+                              : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
 
               // Map location indicator
               Container(
@@ -457,6 +583,7 @@ class _MapCard extends StatelessWidget {
   final void Function(GoogleMapController) onMapCreated;
   final void Function(LatLng) onTap;
   final LatLng? pickupLocation;
+  final bool addingDestination;
   final double? height;
 
   const _MapCard({
@@ -464,6 +591,7 @@ class _MapCard extends StatelessWidget {
     required this.onMapCreated,
     required this.onTap,
     required this.pickupLocation,
+    this.addingDestination = false,
     this.height,
   });
 
@@ -485,9 +613,9 @@ class _MapCard extends StatelessWidget {
               children: [
                 Icon(Icons.map, color: AppTheme.primaryColor, size: 20),
                 const SizedBox(width: 8),
-                const Text(
-                  'تحديد موقع الراكب',
-                  style: TextStyle(
+                Text(
+                  addingDestination ? 'تحديد الوجهة' : 'تحديد موقع الراكب',
+                  style: const TextStyle(
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
@@ -495,7 +623,7 @@ class _MapCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'انقر على الخريطة',
+                  addingDestination ? 'انقر لوضع pin أخضر' : 'انقر لوضع pin أحمر',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 12,
@@ -535,10 +663,11 @@ class _SuccessCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final driverName = result['driver_name'] as String? ?? 'سائق';
-    final driverPhone = result['driver_phone'] as String? ?? '';
-    final etaMinutes = result['eta_minutes'] as int? ?? 5;
-    final rideId = result['ride_id'] as String? ?? '';
+    final driverName     = result['driver_name']     as String? ?? 'سائق';
+    final driverPhone    = result['driver_phone']    as String? ?? '';
+    final etaMinutes     = result['eta_minutes']     as int? ?? 5;
+    final rideId         = result['ride_id']         as String? ?? '';
+    final estimatedPrice = result['estimated_price'] as num?;
 
     return Card(
       elevation: 2,
@@ -568,6 +697,18 @@ class _SuccessCard extends StatelessWidget {
               label: 'الوقت المتوقع للوصول',
               value: '$etaMinutes دقائق',
             ),
+            if (estimatedPrice != null && estimatedPrice > 0)
+              _InfoRow(
+                icon: Icons.payments,
+                label: 'السعر التقديري',
+                value: '${estimatedPrice.toStringAsFixed(0)} ETB',
+              )
+            else
+              _InfoRow(
+                icon: Icons.timer,
+                label: 'السعر',
+                value: 'يُحسب عند الإنهاء',
+              ),
             _InfoRow(
               icon: Icons.tag,
               label: 'رقم الرحلة',

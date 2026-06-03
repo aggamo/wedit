@@ -8,16 +8,19 @@
 //
 // POST body:
 //   {
-//     "passenger_phone": "+251912345678",
-//     "pickup_lat":      9.0246,
-//     "pickup_lng":      38.7468,
-//     "pickup_address":  "أمام محطة أبا نفسو",
-//     "vehicle_type":    "sedan",          // sedan | suv | vip | minibus
-//     "notes":           "ينتظر عند الباب الأخضر"  // optional
+//     "passenger_phone":  "+251912345678",
+//     "pickup_lat":       9.0246,
+//     "pickup_lng":       38.7468,
+//     "pickup_address":   "أمام محطة أبا نفسو",
+//     "vehicle_type":     "sedan",          // sedan | suv | vip | minibus
+//     "notes":            "ينتظر عند الباب الأخضر",  // optional
+//     "dropoff_lat":      9.0100,           // optional — enables fare calculation
+//     "dropoff_lng":      38.7600,          // optional
+//     "dropoff_address":  "ميسكل سكوير"    // optional
 //   }
 //
 // Response (success):
-//   { success: true, ride_id, driver_id, driver_name, driver_phone, eta_minutes }
+//   { success: true, ride_id, driver_id, driver_name, driver_phone, eta_minutes, estimated_price }
 //
 // Response (error):
 //   { success: false, error: "<message>" }
@@ -102,19 +105,41 @@ serve(async (req: Request) => {
     pickup_lat,
     pickup_lng,
     pickup_address,
-    vehicle_type = "sedan",
-    notes = "",
+    vehicle_type    = "sedan",
+    notes           = "",
+    dropoff_lat,
+    dropoff_lng,
+    dropoff_address = "",
   } = body as {
-    passenger_phone: string;
-    pickup_lat: number;
-    pickup_lng: number;
-    pickup_address: string;
-    vehicle_type?: string;
-    notes?: string;
+    passenger_phone:  string;
+    pickup_lat:       number;
+    pickup_lng:       number;
+    pickup_address:   string;
+    vehicle_type?:    string;
+    notes?:           string;
+    dropoff_lat?:     number;
+    dropoff_lng?:     number;
+    dropoff_address?: string;
   };
 
   if (!passenger_phone || pickup_lat == null || pickup_lng == null || !pickup_address) {
     return err("Missing required fields: passenger_phone, pickup_lat, pickup_lng, pickup_address");
+  }
+
+  // ── Calculate estimated fare if destination is known ─────────────────────
+  let estimatedPrice: number | null = null;
+  if (dropoff_lat != null && dropoff_lng != null) {
+    const { data: fareData } = await svc.rpc("calculate_estimated_price", {
+      p_pickup_lat:       pickup_lat,
+      p_pickup_lng:       pickup_lng,
+      p_dropoff_lat:      dropoff_lat,
+      p_dropoff_lng:      dropoff_lng,
+      p_vehicle_type:     vehicle_type,
+      p_surge_multiplier: 1.0,
+    });
+    if (fareData && typeof fareData === "object") {
+      estimatedPrice = (fareData as Record<string, unknown>).total as number ?? null;
+    }
   }
 
   const normalPhone = normalisePhone(passenger_phone);
@@ -152,7 +177,13 @@ serve(async (req: Request) => {
       return distD < distB ? d : best;
     });
 
-    return createRide(svc, nearest.driver_id, normalPhone, pickup_lat, pickup_lng, pickup_address, vehicle_type, notes);
+    return createRide(
+    svc, nearest.driver_id, normalPhone,
+    pickup_lat, pickup_lng, pickup_address,
+    vehicle_type, notes,
+    dropoff_lat ?? null, dropoff_lng ?? null, dropoff_address,
+    estimatedPrice,
+  );
   }
 
   if (!nearbyDrivers || nearbyDrivers.length === 0) {
@@ -160,7 +191,13 @@ serve(async (req: Request) => {
   }
 
   const closestDriverId = (nearbyDrivers[0] as Record<string, unknown>).driver_id as string;
-  return createRide(svc, closestDriverId, normalPhone, pickup_lat, pickup_lng, pickup_address, vehicle_type, notes);
+  return createRide(
+    svc, closestDriverId, normalPhone,
+    pickup_lat, pickup_lng, pickup_address,
+    vehicle_type, notes,
+    dropoff_lat ?? null, dropoff_lng ?? null, dropoff_address,
+    estimatedPrice,
+  );
 });
 
 // ── Helper: create the ride, notify driver ──────────────────────────────────────
@@ -174,6 +211,10 @@ async function createRide(
   pickupAddress: string,
   vehicleType: string,
   notes: string,
+  dropoffLat: number | null,
+  dropoffLng: number | null,
+  dropoffAddress: string,
+  estimatedPrice: number | null,
 ): Promise<Response> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const JSON_HEADERS = {
@@ -202,10 +243,14 @@ async function createRide(
       pickup_lat:      pickupLat,
       pickup_lng:      pickupLng,
       pickup_address:  pickupAddress,
+      dropoff_lat:     dropoffLat,
+      dropoff_lng:     dropoffLng,
+      dropoff_address: dropoffAddress || null,
       ride_type:       "call_center",
       status:          "accepted",
       vehicle_type:    vehicleType,
       notes:           notes || null,
+      estimated_price: estimatedPrice,
     })
     .select("id")
     .single();
@@ -275,12 +320,13 @@ async function createRide(
 
   return new Response(
     JSON.stringify({
-      success:      true,
-      ride_id:      rideId,
-      driver_id:    driverId,
-      driver_name:  driverName,
-      driver_phone: driverPhone,
-      eta_minutes:  etaMinutes,
+      success:         true,
+      ride_id:         rideId,
+      driver_id:       driverId,
+      driver_name:     driverName,
+      driver_phone:    driverPhone,
+      eta_minutes:     etaMinutes,
+      estimated_price: estimatedPrice,
     }),
     { status: 200, headers: JSON_HEADERS },
   );

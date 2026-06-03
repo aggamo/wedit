@@ -207,6 +207,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Price
+            if (ride.estimatedPrice != null && ride.estimatedPrice! > 0)
+              ListTile(
+                leading: const Icon(Icons.payments, color: Colors.green),
+                title: Text(
+                  '${ride.estimatedPrice!.toStringAsFixed(0)} ETB',
+                  style: const TextStyle(
+                      fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text('سعر المنصة — غير قابل للتفاوض',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 11)),
+              )
+            else
+              ListTile(
+                leading: const Icon(Icons.timer, color: Colors.orange),
+                title: const Text('يُحسب لاحقاً',
+                    style: TextStyle(fontFamily: 'Cairo')),
+                subtitle: const Text('السعر يُحدد عند الإنهاء',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 11)),
+              ),
             ListTile(
               leading: const Icon(Icons.location_on, color: Colors.red),
               title: Text(ride.pickupAddress,
@@ -214,6 +234,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               subtitle: const Text('موقع الراكب',
                   style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
             ),
+            if (ride.dropoffAddress.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.flag, color: Colors.blue),
+                title: Text(ride.dropoffAddress,
+                    style: const TextStyle(fontFamily: 'Cairo')),
+                subtitle: const Text('الوجهة',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+              ),
             if (ride.passengerPhone != null)
               ListTile(
                 leading: const Icon(Icons.phone, color: Colors.green),
@@ -243,6 +271,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _dialogShowing = false;
     if (confirmed == true && mounted) {
       context.go('/ride/${ride.id}/navigate');
+    } else if (confirmed == false) {
+      ref.read(rideDatasourceProvider).declineCallCenterRide(ride.id);
     }
   }
 
@@ -267,6 +297,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Price
+            if (ride.estimatedPrice != null && ride.estimatedPrice! > 0)
+              ListTile(
+                leading: const Icon(Icons.payments, color: Colors.green),
+                title: Text(
+                  '${ride.estimatedPrice!.toStringAsFixed(0)} ETB',
+                  style: const TextStyle(
+                      fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text('سعر المنصة — غير قابل للتفاوض',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 11)),
+              )
+            else
+              ListTile(
+                leading: const Icon(Icons.timer, color: Colors.orange),
+                title: const Text('يُحسب لاحقاً',
+                    style: TextStyle(fontFamily: 'Cairo')),
+                subtitle: const Text('السعر يُحدد عند الإنهاء',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 11)),
+              ),
             ListTile(
               leading: const Icon(Icons.location_on, color: Colors.red),
               title: Text(ride.pickupAddress,
@@ -274,6 +324,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               subtitle: const Text('موقع الراكب',
                   style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
             ),
+            if (ride.dropoffAddress.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.flag, color: Colors.blue),
+                title: Text(ride.dropoffAddress,
+                    style: const TextStyle(fontFamily: 'Cairo')),
+                subtitle: const Text('الوجهة',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+              ),
             if (ride.passengerPhone != null)
               ListTile(
                 leading: const Icon(Icons.phone, color: Colors.green),
@@ -303,6 +361,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _dialogShowing = false;
     if (confirmed == true && mounted) {
       context.go('/ride/${ride.id}/navigate');
+    } else if (confirmed == false) {
+      ref.read(rideDatasourceProvider).declineCallCenterRide(ride.id);
     }
   }
 
