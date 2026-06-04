@@ -2,6 +2,7 @@
 // Edge Function: check-achievements
 // Checks and unlocks achievements for a driver after events.
 // Auth: service_role only (called internally).
+// Supports scope filtering: 'ride' | 'streak' | 'rating' | 'any'
 // =============================================================
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -14,19 +15,19 @@ const CORS_HEADERS = {
 
 const JSON_HEADERS = { ...CORS_HEADERS, "Content-Type": "application/json" };
 
-/** Returns the period key string for repeatable achievements (e.g. "2026-06") */
+/** Returns the period key string for repeatable achievements */
 function getPeriodKey(periodType: string): string {
   const now = new Date();
   if (periodType === "monthly") {
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
   }
   if (periodType === "weekly") {
-    // ISO week number
     const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-    const week = Math.ceil(((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getUTCDay() + 1) / 7);
+    const week = Math.ceil(
+      ((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getUTCDay() + 1) / 7
+    );
     return `${now.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
   }
-  // daily
   return now.toISOString().slice(0, 10);
 }
 
@@ -42,7 +43,6 @@ serve(async (req: Request) => {
   const supabaseUrl    = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  // Auth: service_role only
   const authHeader = req.headers.get("authorization") ?? "";
   if (!authHeader.includes(serviceRoleKey)) {
     return new Response(JSON.stringify({ error: "غير مصرح — يتطلب service_role" }), {
@@ -51,7 +51,7 @@ serve(async (req: Request) => {
     });
   }
 
-  let body: { driver_id: string; ride_id?: string };
+  let body: { driver_id: string; ride_id?: string; scope?: string };
   try {
     body = await req.json();
   } catch {
@@ -70,22 +70,30 @@ serve(async (req: Request) => {
 
   const svc      = createClient(supabaseUrl, serviceRoleKey);
   const driverId = body.driver_id;
+  const scope    = body.scope ?? "any"; // 'ride' | 'streak' | 'rating' | 'any'
 
   try {
-    // 1. Fetch all active achievements
-    const { data: achievements, error: achErr } = await svc
+    // 1. Fetch active achievements filtered by evaluation_scope
+    const achQuery = svc
       .from("achievements")
       .select("*")
       .eq("is_active", true);
 
-    if (achErr || !achievements) {
-      return new Response(JSON.stringify({ error: "فشل جلب الإنجازات", details: achErr?.message }), {
-        status: 500,
-        headers: JSON_HEADERS,
-      });
+    // Filter by scope: include 'any' achievements always; scope-specific only when relevant
+    if (scope !== "any") {
+      achQuery.or(`evaluation_scope.eq.any,evaluation_scope.eq.${scope}`);
     }
 
-    // Pre-fetch driver state in parallel — lifetime_stats replaces expensive COUNT on rides
+    const { data: achievements, error: achErr } = await achQuery;
+
+    if (achErr || !achievements) {
+      return new Response(
+        JSON.stringify({ error: "فشل جلب الإنجازات", details: achErr?.message }),
+        { status: 500, headers: JSON_HEADERS }
+      );
+    }
+
+    // 2. Pre-fetch driver state in parallel
     const [
       { data: lifetimeStats },
       { data: streakRow },
@@ -96,27 +104,28 @@ serve(async (req: Request) => {
       svc.from("profiles").select("id, fcm_token, points").eq("id", driverId).maybeSingle(),
     ]);
 
-    const rideCount    = (lifetimeStats?.total_rides as number)      ?? 0;
-    const totalXp      = (lifetimeStats?.total_xp_earned as bigint)  ?? 0;
-    const total5Star   = (lifetimeStats?.total_5star_rides as number) ?? 0;
-    const currentStreak = (streakRow?.current_streak as number)       ?? 0;
+    const rideCount     = (lifetimeStats?.total_rides as number) ?? 0;
+    const totalXp       = (lifetimeStats?.total_xp_earned as number) ?? 0;
+    const total5Star    = (lifetimeStats?.total_5star_rides as number) ?? 0;
+    const currentStreak = (streakRow?.current_streak as number) ?? 0;
 
-    // Rating avg approximation: 5-star share × 5 (fast, no extra query)
-    // Only meaningful when >= 10 rides; falls back to full query for accuracy
+    // 3. Compute average rating only for rating achievements
+    // Query ratings table (score column, rated_user = driver)
     let ratingAvg: number | null = null;
-    if (rideCount >= 10) {
-      if (total5Star / rideCount >= 0.85) {
-        // Likely near 5.0 — do precise query only when close to threshold
+    const hasRatingAchievement   = achievements.some((a) => a.trigger_type === "rating_avg");
+
+    if (hasRatingAchievement && rideCount >= 10) {
+      // Fast path: if 85%+ are 5-star, do precise query
+      if (rideCount > 0 && total5Star / rideCount >= 0.85) {
         const { data: ratingData } = await svc
-          .from("rides")
-          .select("driver_rating")
-          .eq("driver_id", driverId)
-          .eq("status", "completed")
-          .not("driver_rating", "is", null);
+          .from("ratings")
+          .select("score")
+          .eq("rated_user", driverId)
+          .not("score", "is", null);
 
         if (ratingData && ratingData.length > 0) {
           const sum = ratingData.reduce(
-            (acc: number, r: Record<string, unknown>) => acc + (r.driver_rating as number),
+            (acc: number, r: Record<string, unknown>) => acc + (r.score as number),
             0
           );
           ratingAvg = sum / ratingData.length;
@@ -127,11 +136,10 @@ serve(async (req: Request) => {
     const unlockedIds: string[] = [];
     const notifications: Array<{ user_id: string; title: string; body: string; type: string }> = [];
 
-    // 2. Check each achievement
+    // 4. Check each achievement
     for (const ach of achievements) {
       if (ach.trigger_type === "admin_manual") continue;
 
-      // Determine period key for repeatable achievements
       const periodKey = ach.is_repeatable && ach.period_type
         ? getPeriodKey(ach.period_type as string)
         : null;
@@ -150,7 +158,7 @@ serve(async (req: Request) => {
       }
 
       const { data: existing } = await earnedQuery.maybeSingle();
-      if (existing) continue; // already earned this period
+      if (existing) continue;
 
       // Check trigger condition
       let conditionMet = false;
@@ -163,8 +171,7 @@ serve(async (req: Request) => {
           conditionMet = currentStreak >= (ach.trigger_value as number);
           break;
         case "xp_total":
-          // Uses cumulative XP earned (not net balance) — never decreases
-          conditionMet = Number(totalXp) >= (ach.trigger_value as number);
+          conditionMet = totalXp >= (ach.trigger_value as number);
           break;
         case "rating_avg":
           conditionMet = ratingAvg !== null && ratingAvg >= (ach.trigger_value as number);
@@ -175,7 +182,7 @@ serve(async (req: Request) => {
 
       if (!conditionMet) continue;
 
-      // 3. Unlock achievement
+      // 5. Unlock achievement
       const { error: insertErr } = await svc.from("driver_achievements").insert({
         driver_id:      driverId,
         achievement_id: ach.id,
@@ -190,13 +197,12 @@ serve(async (req: Request) => {
 
       unlockedIds.push(ach.id as string);
 
-      // Award reward points
+      // Award reward points — atomic RPC (no race condition)
       if (ach.reward_points && (ach.reward_points as number) > 0) {
-        const currentPoints = (profile?.points as number) ?? 0;
-        await svc
-          .from("profiles")
-          .update({ points: currentPoints + (ach.reward_points as number) })
-          .eq("id", driverId);
+        await svc.rpc("increment_driver_points", {
+          p_driver_id: driverId,
+          p_amount:    ach.reward_points,
+        });
 
         await svc.from("points_transactions").insert({
           user_id:     driverId,
@@ -227,7 +233,7 @@ serve(async (req: Request) => {
       }
     }
 
-    // 4. Fire notifications (non-blocking)
+    // 6. Fire notifications (non-blocking)
     for (const notif of notifications) {
       fetch(`${supabaseUrl}/functions/v1/send-notification`, {
         method:  "POST",

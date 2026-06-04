@@ -26,7 +26,9 @@ class SubscriptionRemoteDatasourceImpl implements SubscriptionRemoteDatasource {
 
       final data = await _supabase
           .from(AppConstants.subscriptionsTable)
-          .select()
+          .select(
+            '*, subscription_plans(use_active_days, no_expiry, active_days_total)',
+          )
           .eq('driver_id', userId)
           .eq('status', 'active')
           .order('created_at', ascending: false)
@@ -45,34 +47,58 @@ class SubscriptionRemoteDatasourceImpl implements SubscriptionRemoteDatasource {
       String driverId, String plan, String paymentMethod) async {
     try {
       final now = DateTime.now();
-      final endsAt = _calculateEndsAt(plan, now);
-      final amount = _getPlanPrice(plan);
 
-      // For bank transfer, create pending subscription
+      // Fetch plan definition from subscription_plans table
+      final planRow = await _supabase
+          .from('subscription_plans')
+          .select()
+          .eq('plan_key', plan)
+          .eq('is_active', true)
+          .maybeSingle();
+
+      final bool useActiveDays = planRow?['use_active_days'] as bool? ?? false;
+      final bool noExpiry      = planRow?['no_expiry'] as bool? ?? false;
+      final int? activeDaysTotal = planRow?['active_days_total'] as int?;
+      final int? durationDays  = planRow?['duration_days'] as int?;
+      final double amount      = (planRow?['price_etb'] as num?)?.toDouble()
+          ?? _getLegacyPrice(plan);
+
+      // Calculate ends_at:
+      // - active_days plans: null (quota-based, no calendar expiry)
+      // - no_expiry plans: null
+      // - calendar plans: now + duration_days
+      DateTime? endsAt;
+      if (!useActiveDays && !noExpiry && durationDays != null && durationDays > 0) {
+        endsAt = now.add(Duration(days: durationDays));
+      }
+
       final status = paymentMethod == 'bank_transfer' ? 'pending' : 'active';
+
+      final insertPayload = <String, dynamic>{
+        'driver_id':      driverId,
+        'plan':           plan,
+        'amount':         amount,
+        'status':         status,
+        'started_at':     now.toIso8601String(),
+        'ends_at':        endsAt?.toIso8601String(),
+        'payment_method': paymentMethod,
+        'auto_renew':     false,
+        'is_trial':       plan == 'trial',
+      };
+
+      if (planRow != null) {
+        insertPayload['subscription_plan_id'] = planRow['id'] as String;
+        insertPayload['active_days_used']     = 0;
+        insertPayload['active_days_quota']    = activeDaysTotal;
+      }
 
       final data = await _supabase
           .from(AppConstants.subscriptionsTable)
-          .insert({
-            'driver_id': driverId,
-            'plan': plan,
-            'amount': amount,
-            'status': status,
-            'starts_at': now.toIso8601String(),
-            'ends_at': endsAt.toIso8601String(),
-            'payment_method': paymentMethod,
-            'auto_renew': false,
-          })
-          .select()
+          .insert(insertPayload)
+          .select(
+            '*, subscription_plans(use_active_days, no_expiry, active_days_total)',
+          )
           .single();
-
-      // Update driver subscription status if active
-      if (status == 'active') {
-        await _supabase
-            .from(AppConstants.driversTable)
-            .update({'has_active_subscription': true})
-            .eq('id', driverId);
-      }
 
       return _mapToEntity(data);
     } on PostgrestException catch (e) {
@@ -111,12 +137,11 @@ class SubscriptionRemoteDatasourceImpl implements SubscriptionRemoteDatasource {
           .from(AppConstants.receiptsBucket)
           .getPublicUrl(path);
 
-      // Record in payment_receipts table
       await _supabase.from('payment_receipts').insert({
-        'driver_id': driverId,
-        'amount': amount,
-        'receipt_url': url,
-        'status': 'pending',
+        'driver_id':    driverId,
+        'amount':       amount,
+        'receipt_url':  url,
+        'status':       'pending',
         'submitted_at': DateTime.now().toIso8601String(),
       });
     } on StorageException catch (e) {
@@ -126,44 +151,41 @@ class SubscriptionRemoteDatasourceImpl implements SubscriptionRemoteDatasource {
     }
   }
 
-  DateTime _calculateEndsAt(String plan, DateTime from) {
+  // Legacy price fallback for plans without a subscription_plans row
+  double _getLegacyPrice(String plan) {
     switch (plan) {
-      case 'daily':
-        return from.add(const Duration(days: 1));
-      case 'weekly':
-        return from.add(const Duration(days: 7));
-      case 'monthly':
-        return from.add(const Duration(days: 30));
-      default:
-        return from.add(const Duration(days: 1));
-    }
-  }
-
-  double _getPlanPrice(String plan) {
-    switch (plan) {
-      case 'daily':
-        return AppConstants.dailyPrice;
-      case 'weekly':
-        return AppConstants.weeklyPrice;
-      case 'monthly':
-        return AppConstants.monthlyPrice;
-      default:
-        return AppConstants.dailyPrice;
+      case 'daily':  return AppConstants.dailyPrice;
+      case 'weekly': return AppConstants.weeklyPrice;
+      default:       return AppConstants.dailyPrice;
     }
   }
 
   SubscriptionEntity _mapToEntity(Map<String, dynamic> data) {
+    // Plan details may come as nested join (subscription_plans)
+    final planDetails = data['subscription_plans'] as Map<String, dynamic>?;
+    final bool useActiveDays = planDetails?['use_active_days'] as bool? ?? false;
+    final bool noExpiry      = planDetails?['no_expiry'] as bool? ?? false;
+
+    final endsAtStr = data['ends_at'] as String?;
+
     return SubscriptionEntity(
-      id: data['id'] as String,
-      driverId: data['driver_id'] as String,
-      plan: data['plan'] as String,
-      amount: (data['amount'] as num).toDouble(),
-      status: data['status'] as String,
-      startsAt: DateTime.parse(data['starts_at'] as String),
-      endsAt: DateTime.parse(data['ends_at'] as String),
-      autoRenew: data['auto_renew'] as bool? ?? false,
-      paymentMethod: data['payment_method'] as String?,
-      receiptUrl: data['receipt_url'] as String?,
+      id:                 data['id'] as String,
+      driverId:           data['driver_id'] as String,
+      plan:               data['plan'] as String,
+      amount:             (data['amount'] as num).toDouble(),
+      status:             data['status'] as String,
+      startsAt:           DateTime.parse(data['started_at'] as String),
+      endsAt:             endsAtStr != null ? DateTime.parse(endsAtStr) : null,
+      autoRenew:          data['auto_renew'] as bool? ?? false,
+      paymentMethod:      data['payment_method'] as String?,
+      receiptUrl:         data['receipt_url'] as String?,
+      subscriptionPlanId: data['subscription_plan_id'] as String?,
+      isFrozen:           data['is_frozen'] as bool? ?? false,
+      isTrial:            data['is_trial'] as bool? ?? false,
+      useActiveDays:      useActiveDays,
+      noExpiry:           noExpiry,
+      activeDaysUsed:     data['active_days_used'] as int? ?? 0,
+      activeDaysQuota:    data['active_days_quota'] as int?,
     );
   }
 }

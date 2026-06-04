@@ -22,19 +22,19 @@ interface DriverSubscription {
   ends_at: string | null;
   active_days_used: number;
   active_days_quota: number | null;
-  last_active_date: string | null;
-  no_expiry: boolean;
   subscription_plans: {
     use_active_days: boolean;
+    no_expiry: boolean;
     features: Record<string, unknown>;
   } | null;
 }
 
-interface StreakConfig {
+interface StreakMilestone {
   days: number;
   reward_points: number;
   reward_xp: number;
-  description_ar: string;
+  message?: string;
+  box_id?: string;
 }
 
 /** Format date as YYYY-MM-DD in UTC */
@@ -54,7 +54,6 @@ serve(async (req: Request) => {
   const supabaseUrl    = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  // Auth: service_role only
   const authHeader = req.headers.get("authorization") ?? "";
   if (!authHeader.includes(serviceRoleKey)) {
     return new Response(JSON.stringify({ error: "غير مصرح — يتطلب service_role" }), {
@@ -66,27 +65,46 @@ serve(async (req: Request) => {
   const svc = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    // 1. Fetch global settings
-    const { data: settings } = await svc
+    // 1. Fetch global settings from key-value table
+    const { data: settingRows } = await svc
       .from("subscription_settings")
-      .select(
-        "active_day_min_rides, active_day_min_hours, inactive_xp_penalty_per_day, inactive_level_decay_days, personal_goal_window_days, personal_goal_multiplier"
-      )
-      .single();
+      .select("key, value")
+      .in("key", [
+        "active_day_min_rides",
+        "active_day_min_hours",
+        "active_day_min_revenue_etb",
+        "inactive_xp_penalty_per_day",
+        "inactive_level_decay_days",
+        "personal_goal_window_days",
+        "personal_goal_multiplier",
+      ]);
 
-    const minRides: number             = (settings?.active_day_min_rides as number)         ?? 6;
-    const inactiveXpPenalty: number    = (settings?.inactive_xp_penalty_per_day as number)  ?? 10;
-    const decayDays: number            = (settings?.inactive_level_decay_days as number)    ?? 14;
-    const goalWindowDays: number       = (settings?.personal_goal_window_days as number)    ?? 14;
-    const goalMultiplier: number       = (settings?.personal_goal_multiplier as number)     ?? 1.2;
+    const settings: Record<string, number> = {};
+    for (const row of (settingRows ?? [])) {
+      const raw = row.value;
+      // value may be stored as JSON number/string or quoted string
+      const parsed = typeof raw === "number"
+        ? raw
+        : parseFloat(String(raw).replace(/^"|"$/g, ""));
+      if (!isNaN(parsed)) settings[row.key as string] = parsed;
+    }
 
-    // 2. Fetch streak milestone configs
-    const { data: streakConfigs } = await svc
+    const minRides          = settings.active_day_min_rides           ?? 3;
+    const minRevenue        = settings.active_day_min_revenue_etb      ?? 0;
+    const inactiveXpPenalty = settings.inactive_xp_penalty_per_day    ?? 10;
+    const decayDays         = settings.inactive_level_decay_days       ?? 30;
+    const goalWindowDays    = settings.personal_goal_window_days       ?? 14;
+    const goalMultiplier    = settings.personal_goal_multiplier        ?? 1.25;
+
+    // 2. Fetch streak milestone config (milestones is a JSONB array in streak_configs)
+    const { data: streakConfigRow } = await svc
       .from("streak_configs")
-      .select("days, reward_points, reward_xp, description_ar")
-      .order("days");
+      .select("min_rides, milestones")
+      .eq("period_type", "daily")
+      .maybeSingle();
 
-    const milestones: StreakConfig[] = (streakConfigs ?? []) as StreakConfig[];
+    const milestones: StreakMilestone[] =
+      (streakConfigRow?.milestones as StreakMilestone[]) ?? [];
 
     // 3. Fetch all active, non-frozen subscriptions with plan details
     const { data: activeSubs, error: subsErr } = await svc
@@ -97,10 +115,9 @@ serve(async (req: Request) => {
         ends_at,
         active_days_used,
         active_days_quota,
-        last_active_date,
-        no_expiry,
         subscription_plans (
           use_active_days,
+          no_expiry,
           features
         )
       `)
@@ -122,7 +139,6 @@ serve(async (req: Request) => {
     let processed         = 0;
     let activeDaysCounted = 0;
     const errors: string[] = [];
-
     const notifications: Array<{ user_id: string; title: string; body: string; type: string }> = [];
 
     // 4. Process each driver
@@ -130,13 +146,12 @@ serve(async (req: Request) => {
       try {
         const driverId = sub.driver_id;
         const plan     = sub.subscription_plans;
+        const noExpiry = plan?.no_expiry ?? false;
 
-        // ── Trial plan (no active day counting) ─────────────────
+        // ── Trial / calendar plan ────────────────────────────────
         if (!plan?.use_active_days) {
-          // Check expiry only
-          if (sub.ends_at && !sub.no_expiry && new Date(sub.ends_at) <= now) {
-            await svc
-              .from("driver_subscriptions")
+          if (sub.ends_at && !noExpiry && new Date(sub.ends_at) <= now) {
+            await svc.from("driver_subscriptions")
               .update({ status: "expired" })
               .eq("id", sub.id);
           }
@@ -146,50 +161,59 @@ serve(async (req: Request) => {
 
         // ── Active days plan ─────────────────────────────────────
 
-        // Count rides yesterday
-        const { count: ridesYesterday } = await svc
-          .from("rides")
-          .select("*", { count: "exact", head: true })
+        // Read yesterday's summary from driver_activity_days (updated by DB trigger)
+        const { data: activityRow } = await svc
+          .from("driver_activity_days")
+          .select("rides_count, income_etb")
           .eq("driver_id", driverId)
-          .eq("status", "completed")
-          .gte("completed_at", `${yesterdayStr}T00:00:00Z`)
-          .lt("completed_at", `${toDateString(now)}T00:00:00Z`);
+          .eq("activity_date", yesterdayStr)
+          .maybeSingle();
 
-        const wasActive = (ridesYesterday ?? 0) >= minRides;
+        const ridesYesterday  = activityRow?.rides_count  ?? 0;
+        const incomeYesterday = Number(activityRow?.income_etb ?? 0);
 
-        // Fetch current streak
+        const wasActive =
+          ridesYesterday >= minRides &&
+          (minRevenue <= 0 || incomeYesterday >= minRevenue);
+
+        // Fetch current streak (last_active_date lives in driver_streaks)
         const { data: streakRow } = await svc
           .from("driver_streaks")
           .select("current_streak, longest_streak, last_active_date, streak_frozen")
           .eq("driver_id", driverId)
           .maybeSingle();
 
-        const streakFrozen      = (streakRow?.streak_frozen as boolean) ?? false;
-        const currentStreak     = (streakRow?.current_streak as number) ?? 0;
-        const longestStreak     = (streakRow?.longest_streak as number) ?? 0;
+        const streakFrozen      = (streakRow?.streak_frozen as boolean)      ?? false;
+        const currentStreak     = (streakRow?.current_streak as number)      ?? 0;
+        const longestStreak     = (streakRow?.longest_streak as number)      ?? 0;
         const lastActiveDateStr = streakRow?.last_active_date as string | null;
 
         if (wasActive) {
           // ── Active day ─────────────────────────────────────────
           activeDaysCounted++;
 
-          // Update subscription active_days_used
           const newActiveDaysUsed = (sub.active_days_used ?? 0) + 1;
           const subUpdate: Record<string, unknown> = {
             active_days_used: newActiveDaysUsed,
-            last_active_date: yesterdayStr,
           };
 
-          // Check if quota reached
+          // Expire if quota reached (flex/no_expiry plans never expire this way)
           if (
             sub.active_days_quota !== null &&
             newActiveDaysUsed >= sub.active_days_quota &&
-            !sub.no_expiry
+            !noExpiry
           ) {
             subUpdate.status = "expired";
           }
 
           await svc.from("driver_subscriptions").update(subUpdate).eq("id", sub.id);
+
+          // Mark activity day as qualified
+          await svc
+            .from("driver_activity_days")
+            .update({ qualified: true })
+            .eq("driver_id", driverId)
+            .eq("activity_date", yesterdayStr);
 
           // Update streak (unless frozen)
           if (!streakFrozen) {
@@ -212,7 +236,7 @@ serve(async (req: Request) => {
               { onConflict: "driver_id" }
             );
 
-            // Sync best_streak to lifetime_stats whenever it improves
+            // Sync best_streak to lifetime_stats
             if (newLongest > longestStreak) {
               await svc.from("driver_lifetime_stats").upsert(
                 { driver_id: driverId, best_streak: newLongest },
@@ -220,43 +244,43 @@ serve(async (req: Request) => {
               );
             }
 
+            // Clear dormant flag if driver becomes active again
+            await svc
+              .from("driver_level_state")
+              .update({ is_dormant: false, dormant_since: null })
+              .eq("driver_id", driverId)
+              .eq("is_dormant", true);
+
             // Check streak milestones
             for (const milestone of milestones) {
               if (newStreak === milestone.days) {
-                // Award milestone rewards
-                if (milestone.reward_points > 0) {
-                  const { data: profileRow } = await svc
-                    .from("profiles")
-                    .select("points")
-                    .eq("id", driverId)
-                    .single();
-
-                  await svc
-                    .from("profiles")
-                    .update({ points: ((profileRow?.points as number) ?? 0) + milestone.reward_points })
-                    .eq("id", driverId);
+                if ((milestone.reward_points ?? 0) > 0) {
+                  // Atomic points update — no race condition
+                  await svc.rpc("increment_driver_points", {
+                    p_driver_id: driverId,
+                    p_amount:    milestone.reward_points,
+                  });
 
                   await svc.from("points_transactions").insert({
                     user_id:     driverId,
                     amount:      milestone.reward_points,
                     type:        "bonus",
-                    description: milestone.description_ar || `مكافأة ${milestone.days} يوم متتالي`,
+                    description: milestone.message || `مكافأة ${milestone.days} يوم متتالي`,
                   });
                 }
 
-                if (milestone.reward_xp > 0) {
+                if ((milestone.reward_xp ?? 0) > 0) {
                   await svc.from("driver_xp_transactions").insert({
                     driver_id:   driverId,
                     amount:      milestone.reward_xp,
                     type:        "streak_milestone",
-                    description: milestone.description_ar || `XP ${milestone.days} يوم متتالي`,
+                    description: milestone.message || `XP ${milestone.days} يوم متتالي`,
                   });
                 }
               }
             }
           }
 
-          // Active day notification
           notifications.push({
             user_id: driverId,
             title:   "يوم نشط ✓",
@@ -269,13 +293,12 @@ serve(async (req: Request) => {
 
           // Reset streak (unless frozen)
           if (!streakFrozen && currentStreak > 0) {
-            await svc
-              .from("driver_streaks")
+            await svc.from("driver_streaks")
               .update({ current_streak: 0 })
               .eq("driver_id", driverId);
           }
 
-          // XP penalty for inactivity
+          // XP penalty
           if (inactiveXpPenalty > 0) {
             await svc.from("driver_xp_transactions").insert({
               driver_id:   driverId,
@@ -285,7 +308,6 @@ serve(async (req: Request) => {
             });
           }
 
-          // Inactive notification
           notifications.push({
             user_id: driverId,
             title:   "يوم هادئ",
@@ -294,68 +316,33 @@ serve(async (req: Request) => {
           });
         }
 
-        // ── Level decay check ──────────────────────────────────
+        // ── Dormant check (replaces hard level-down) ──────────────
         const decayThreshold = new Date(now);
         decayThreshold.setUTCDate(decayThreshold.getUTCDate() - decayDays);
         const lastActivityDate = lastActiveDateStr ? new Date(lastActiveDateStr) : null;
 
         if (!lastActivityDate || lastActivityDate < decayThreshold) {
-          // Fetch current level and demote one step
-          const { data: levelState } = await svc
+          await svc
             .from("driver_level_state")
-            .select("level_id, level_definitions(sort_order)")
+            .update({ is_dormant: true, dormant_since: toDateString(now) })
             .eq("driver_id", driverId)
-            .maybeSingle();
-
-          if (levelState?.level_id) {
-            const currentSortOrder = (levelState.level_definitions as Record<string, unknown>)?.sort_order as number ?? 0;
-
-            if (currentSortOrder > 0) {
-              const { data: prevLevel } = await svc
-                .from("level_definitions")
-                .select("id")
-                .lt("sort_order", currentSortOrder)
-                .order("sort_order", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-              if (prevLevel) {
-                await svc
-                  .from("driver_level_state")
-                  .update({ level_id: prevLevel.id })
-                  .eq("driver_id", driverId);
-
-                await svc.from("driver_xp_transactions").insert({
-                  driver_id:   driverId,
-                  amount:      -50,
-                  type:        "penalty_inactive",
-                  description: "تراجع المستوى للخمول",
-                });
-              }
-            }
-          }
+            .is("dormant_since", null); // only set once
         }
 
         // ── Update personal ride goal ──────────────────────────
         const goalWindowStart = new Date(now);
         goalWindowStart.setUTCDate(goalWindowStart.getUTCDate() - goalWindowDays);
+        const goalWindowStartStr = toDateString(goalWindowStart);
 
-        const { data: recentRides } = await svc
-          .from("rides")
-          .select("completed_at")
+        const { data: recentDays } = await svc
+          .from("driver_activity_days")
+          .select("rides_count")
           .eq("driver_id", driverId)
-          .eq("status", "completed")
-          .gte("completed_at", goalWindowStart.toISOString());
+          .gte("activity_date", goalWindowStartStr);
 
-        if (recentRides && recentRides.length > 0) {
-          // Group by day and compute average
-          const dayCounts: Record<string, number> = {};
-          for (const ride of recentRides) {
-            const day = (ride.completed_at as string).slice(0, 10);
-            dayCounts[day] = (dayCounts[day] ?? 0) + 1;
-          }
-          const dayValues     = Object.values(dayCounts);
-          const avgRidesPerDay = dayValues.reduce((a, b) => a + b, 0) / Math.max(dayValues.length, 1);
+        if (recentDays && recentDays.length > 0) {
+          const totalRides     = recentDays.reduce((a, r) => a + (r.rides_count as number), 0);
+          const avgRidesPerDay = totalRides / goalWindowDays; // use full window, not just active days
           const newDailyGoal   = Math.max(1, Math.ceil(avgRidesPerDay * goalMultiplier));
 
           await svc.from("driver_goal_state").upsert(
@@ -375,7 +362,7 @@ serve(async (req: Request) => {
       }
     }
 
-    // 5. Fire notifications (non-blocking, batched)
+    // 5. Fire notifications (non-blocking)
     for (const notif of notifications) {
       fetch(`${supabaseUrl}/functions/v1/send-notification`, {
         method:  "POST",

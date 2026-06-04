@@ -19,9 +19,9 @@ function isPeakHour(
   completedAt: string,
   peakSlots: Array<{ start_time: string; end_time: string; days_of_week?: number[] }>
 ): boolean {
-  const date = new Date(completedAt);
-  const dowJs = date.getDay(); // 0=Sun…6=Sat
-  const hhmm = date.getUTCHours() * 60 + date.getUTCMinutes();
+  const date   = new Date(completedAt);
+  const dowJs  = date.getUTCDay(); // 0=Sun…6=Sat
+  const hhmm   = date.getUTCHours() * 60 + date.getUTCMinutes();
 
   for (const slot of peakSlots) {
     if (slot.days_of_week && slot.days_of_week.length > 0) {
@@ -29,8 +29,8 @@ function isPeakHour(
     }
     const [sh, sm] = slot.start_time.split(":").map(Number);
     const [eh, em] = slot.end_time.split(":").map(Number);
-    const start = sh * 60 + sm;
-    const end = eh * 60 + em;
+    const start    = sh * 60 + sm;
+    const end      = eh * 60 + em;
     if (end > start) {
       if (hhmm >= start && hhmm < end) return true;
     } else {
@@ -53,11 +53,10 @@ serve(async (req: Request) => {
   const supabaseUrl    = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  // Auth: service_role key in Authorization header
+  // Auth: service_role key or admin JWT
   const authHeader = req.headers.get("authorization") ?? "";
   if (!authHeader.includes(serviceRoleKey)) {
-    // Allow admin users too
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY")!;
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -68,7 +67,7 @@ serve(async (req: Request) => {
         headers: JSON_HEADERS,
       });
     }
-    const svc = createClient(supabaseUrl, serviceRoleKey);
+    const svc              = createClient(supabaseUrl, serviceRoleKey);
     const { data: profile } = await svc.from("profiles").select("role").eq("id", user.id).single();
     if (!profile || profile.role !== "admin") {
       return new Response(JSON.stringify({ error: "غير مصرح — يتطلب صلاحيات المشرف" }), {
@@ -98,10 +97,10 @@ serve(async (req: Request) => {
   const svc = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    // 1. Fetch ride
+    // 1. Fetch ride — use actual column names from rides table
     const { data: ride, error: rideErr } = await svc
       .from("rides")
-      .select("id, driver_id, passenger_id, distance_km, fare_amount, driver_rating, payment_method, status, completed_at")
+      .select("id, driver_id, passenger_id, distance_km, final_price, payment_method, status, completed_at")
       .eq("id", body.ride_id)
       .single();
 
@@ -119,7 +118,17 @@ serve(async (req: Request) => {
       });
     }
 
-    // 2. Fetch active point earning rules
+    // 2. Fetch driver rating from ratings table (score is the rating column)
+    const { data: ratingRow } = await svc
+      .from("ratings")
+      .select("score")
+      .eq("ride_id", ride.id)
+      .eq("rated_user", ride.driver_id)
+      .maybeSingle();
+
+    const driverRating = ratingRow?.score as number | null;
+
+    // 3. Fetch active point earning rules
     const now = new Date().toISOString();
     const { data: pointRules } = await svc
       .from("point_earning_rules")
@@ -129,18 +138,29 @@ serve(async (req: Request) => {
       .or(`valid_until.is.null,valid_until.gte.${now}`)
       .order("sort_order");
 
-    // 3. Fetch driver's vehicle type
-    const { data: driverRow } = await svc
-      .from("drivers")
-      .select("id, vehicle_id, subscription_plan_id, vehicles(vehicle_type), subscription_plans(features)")
-      .eq("id", ride.driver_id)
-      .single();
+    // 4. Fetch driver's vehicle type (column is "type", not "vehicle_type")
+    const { data: vehicleRow } = await svc
+      .from("vehicles")
+      .select("type")
+      .eq("driver_id", ride.driver_id)
+      .eq("is_active", true)
+      .maybeSingle();
 
-    const vehicleType: string = (driverRow?.vehicles as Record<string, unknown>)?.vehicle_type as string ?? "standard";
-    const subscriptionFeatures = (driverRow?.subscription_plans as Record<string, unknown>)?.features as Record<string, unknown> ?? {};
-    const xpMultiplier: number = (subscriptionFeatures.xp_multiplier as number) ?? 1.0;
+    const vehicleType = vehicleRow?.type as string ?? "sedan";
 
-    // 4. Calculate reward points for driver
+    // 5. Fetch XP multiplier from active subscription plan
+    const { data: activeSub } = await svc
+      .from("driver_subscriptions")
+      .select("subscription_plans(features)")
+      .eq("driver_id", ride.driver_id)
+      .eq("status", "active")
+      .maybeSingle();
+
+    const subscriptionFeatures =
+      (activeSub?.subscription_plans as Record<string, unknown>)?.features as Record<string, unknown> ?? {};
+    const xpMultiplier = (subscriptionFeatures.xp_multiplier as number) ?? 1.0;
+
+    // 6. Calculate reward points for driver
     let rewardPoints = 0;
 
     for (const rule of (pointRules ?? [])) {
@@ -148,25 +168,43 @@ serve(async (req: Request) => {
         case "per_ride":
           rewardPoints += rule.points_value;
           break;
+
         case "per_km":
-          if (ride.distance_km && (rule.min_threshold == null || ride.distance_km >= rule.min_threshold)) {
+          if (
+            ride.distance_km != null &&
+            (rule.min_threshold == null || ride.distance_km >= rule.min_threshold)
+          ) {
             rewardPoints += rule.points_value * (ride.distance_km as number);
           }
           break;
+
         case "per_etb":
-          if (ride.fare_amount) {
-            rewardPoints += rule.points_value * (ride.fare_amount as number);
+          if (ride.final_price != null) {
+            rewardPoints += rule.points_value * (ride.final_price as number);
           }
           break;
+
         case "rating_bonus":
-          if (ride.driver_rating && rule.rating_threshold && ride.driver_rating >= rule.rating_threshold) {
+          if (
+            driverRating != null &&
+            rule.rating_threshold != null &&
+            driverRating >= rule.rating_threshold
+          ) {
             rewardPoints += rule.points_value;
           }
           break;
+
         case "peak_hour":
           if (ride.completed_at) {
-            const slots = (rule.time_slots as Array<{ start_time: string; end_time: string; days_of_week?: number[] }>) ?? [];
-            if (isPeakHour(ride.completed_at, slots)) {
+            // time_range stores {"time_slots":[{start_time,end_time,days_of_week},...]}
+            const slots = (
+              (rule.time_range as Record<string, unknown>)?.time_slots as Array<{
+                start_time: string;
+                end_time: string;
+                days_of_week?: number[];
+              }>
+            ) ?? [];
+            if (isPeakHour(ride.completed_at as string, slots)) {
               rewardPoints += rule.points_value;
             }
           }
@@ -174,24 +212,18 @@ serve(async (req: Request) => {
       }
     }
 
-    // 5. Apply vehicle type multiplier
-    const vehicleMultipliers = (pointRules?.[0]?.vehicle_multipliers as Record<string, number>) ?? {};
+    // 7. Apply vehicle type multiplier (use first rule's vehicle_multipliers as global config)
+    const vehicleMultipliers =
+      (pointRules?.find((r) => r.vehicle_multipliers)?.vehicle_multipliers as Record<string, number>) ?? {};
     const vehicleMultiplier = vehicleMultipliers[vehicleType] ?? 1.0;
     rewardPoints = Math.floor(rewardPoints * vehicleMultiplier);
 
-    // 6. Award points if any
+    // 8. Award points atomically (RPC avoids SELECT+UPDATE race condition)
     if (rewardPoints > 0) {
-      const { data: profileNow } = await svc
-        .from("profiles")
-        .select("points")
-        .eq("id", ride.driver_id)
-        .single();
-
-      const currentPoints = (profileNow?.points as number) ?? 0;
-      await svc
-        .from("profiles")
-        .update({ points: currentPoints + rewardPoints })
-        .eq("id", ride.driver_id);
+      await svc.rpc("increment_driver_points", {
+        p_driver_id: ride.driver_id,
+        p_amount:    rewardPoints,
+      });
 
       await svc.from("points_transactions").insert({
         user_id:     ride.driver_id,
@@ -202,7 +234,7 @@ serve(async (req: Request) => {
       });
     }
 
-    // 7. Calculate XP for driver
+    // 9. Calculate XP for driver
     const { data: xpRules } = await svc
       .from("xp_earning_rules")
       .select("*")
@@ -214,14 +246,14 @@ serve(async (req: Request) => {
         case "per_ride":
           xpGained += xpRule.xp_value;
           break;
+
         case "rating_bonus": {
-          const condData = (xpRule.condition_data as Record<string, number>) ?? {};
+          const condData  = (xpRule.condition_data as Record<string, number>) ?? {};
           const minRating = condData.min_rating;
           const maxRating = condData.max_rating;
-          if (ride.driver_rating) {
-            const rating = ride.driver_rating as number;
-            const meetsMin = minRating == null || rating >= minRating;
-            const meetsMax = maxRating == null || rating <= maxRating;
+          if (driverRating != null) {
+            const meetsMin = minRating == null || driverRating >= minRating;
+            const meetsMax = maxRating == null || driverRating <= maxRating;
             if (meetsMin && meetsMax) {
               xpGained += xpRule.xp_value;
             }
@@ -234,7 +266,7 @@ serve(async (req: Request) => {
     // Apply subscription XP multiplier
     xpGained = Math.floor(xpGained * xpMultiplier);
 
-    // 8. Record XP if any
+    // 10. Record XP
     if (xpGained !== 0) {
       await svc.from("driver_xp_transactions").insert({
         driver_id:   ride.driver_id,
@@ -245,7 +277,7 @@ serve(async (req: Request) => {
       });
     }
 
-    // 9. Ensure driver_level_state row exists
+    // 11. Ensure required gamification rows exist for this driver
     const { data: levelDefBronze } = await svc
       .from("level_definitions")
       .select("id")
@@ -253,31 +285,29 @@ serve(async (req: Request) => {
       .limit(1)
       .single();
 
-    await svc.from("driver_level_state").upsert(
-      { driver_id: ride.driver_id, xp: 0, level_id: levelDefBronze?.id },
-      { onConflict: "driver_id", ignoreDuplicates: true }
-    );
+    await Promise.all([
+      svc.from("driver_level_state").upsert(
+        { driver_id: ride.driver_id, xp: 0, level_id: levelDefBronze?.id },
+        { onConflict: "driver_id", ignoreDuplicates: true }
+      ),
+      svc.from("driver_streaks").upsert(
+        { driver_id: ride.driver_id, current_streak: 0, longest_streak: 0 },
+        { onConflict: "driver_id", ignoreDuplicates: true }
+      ),
+      svc.from("driver_goal_state").upsert(
+        { driver_id: ride.driver_id, daily_goal_rides: 5 },
+        { onConflict: "driver_id", ignoreDuplicates: true }
+      ),
+    ]);
 
-    // 10. Ensure driver_streaks row exists
-    await svc.from("driver_streaks").upsert(
-      { driver_id: ride.driver_id, current_streak: 0, longest_streak: 0 },
-      { onConflict: "driver_id", ignoreDuplicates: true }
-    );
-
-    // 11. Ensure driver_goal_state row exists
-    await svc.from("driver_goal_state").upsert(
-      { driver_id: ride.driver_id, daily_goal_rides: 5 },
-      { onConflict: "driver_id", ignoreDuplicates: true }
-    );
-
-    // Fire check-achievements (non-blocking)
+    // 12. Fire check-achievements (non-blocking, scope=ride)
     fetch(`${supabaseUrl}/functions/v1/check-achievements`, {
       method:  "POST",
       headers: {
         "Content-Type":  "application/json",
         "Authorization": `Bearer ${serviceRoleKey}`,
       },
-      body: JSON.stringify({ driver_id: ride.driver_id, ride_id: ride.id }),
+      body: JSON.stringify({ driver_id: ride.driver_id, ride_id: ride.id, scope: "ride" }),
     }).catch((e) => console.warn("check-achievements fire-and-forget failed:", e));
 
     return new Response(

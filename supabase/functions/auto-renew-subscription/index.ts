@@ -170,20 +170,59 @@ serve(async (req: Request) => {
       );
     }
 
-    const plan       = oldSub.plan as string;
-    const planConfig = PLAN_PRICING[plan];
+    const plan          = oldSub.plan as string;
+    const paymentMethod = oldSub.payment_method as string;
 
-    if (!planConfig) {
-      return new Response(
-        JSON.stringify({ error: `Unknown subscription plan: ${plan}` }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
+    // Resolve plan config: prefer subscription_plans table (new), fall back to PLAN_PRICING (legacy)
+    let planAmount     = 0;
+    let planDays       = 0;
+    let useActiveDays  = false;
+    let activeDaysTotal: number | null = null;
+    let noExpiry       = false;
+
+    if (oldSub.subscription_plan_id) {
+      const { data: planRow } = await supabase
+        .from("subscription_plans")
+        .select("price_etb, duration_days, use_active_days, active_days_total, no_expiry")
+        .eq("id", oldSub.subscription_plan_id)
+        .single();
+
+      if (!planRow) {
+        return new Response(
+          JSON.stringify({ error: `Subscription plan not found: ${oldSub.subscription_plan_id}` }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+
+      planAmount      = planRow.price_etb as number;
+      planDays        = (planRow.duration_days as number) ?? 0;
+      useActiveDays   = (planRow.use_active_days as boolean) ?? false;
+      activeDaysTotal = planRow.active_days_total as number | null;
+      noExpiry        = (planRow.no_expiry as boolean) ?? false;
+    } else {
+      // Legacy path: use hardcoded PLAN_PRICING
+      const planConfig = PLAN_PRICING[plan];
+      if (!planConfig) {
+        return new Response(
+          JSON.stringify({ error: `Unknown subscription plan: ${plan}` }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+      planAmount = planConfig.amount;
+      planDays   = planConfig.days;
     }
 
-    const paymentMethod = oldSub.payment_method as string;
-    const newStartDate  = new Date(oldSub.ends_at);
-    const newEndDate    = new Date(newStartDate);
-    newEndDate.setDate(newEndDate.getDate() + planConfig.days);
+    // Calculate new end date
+    // - active_days / no_expiry plans: null ends_at (or keep existing null)
+    // - calendar plans: ends_at += planDays
+    const newStartDate = oldSub.ends_at ? new Date(oldSub.ends_at) : new Date();
+    let   newEndsAt: string | null = null;
+
+    if (!useActiveDays && !noExpiry && planDays > 0) {
+      const newEndDate = new Date(newStartDate);
+      newEndDate.setDate(newEndDate.getDate() + planDays);
+      newEndsAt = newEndDate.toISOString();
+    }
 
     let paymentReference: string | null = null;
     let checkoutUrl: string | null      = null;
@@ -204,7 +243,7 @@ serve(async (req: Request) => {
 
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const chapaResult = await initiateChapaPayment({
-        amount:      planConfig.amount,
+        amount:      planAmount,
         currency:    "ETB",
         email,
         firstName,
@@ -236,19 +275,30 @@ serve(async (req: Request) => {
     }
 
     // 4. Create new subscription record
+    const newSubPayload: Record<string, unknown> = {
+      driver_id:         driver_id,
+      plan:              plan,
+      amount:            planAmount,
+      status:            newStatus,
+      started_at:        newStartDate.toISOString(),
+      ends_at:           newEndsAt,
+      payment_method:    paymentMethod,
+      payment_reference: paymentReference,
+      auto_renew:        true,
+    };
+
+    // Carry forward plan references for active_days plans
+    if (oldSub.subscription_plan_id) {
+      newSubPayload.subscription_plan_id = oldSub.subscription_plan_id;
+      if (useActiveDays) {
+        newSubPayload.active_days_used  = 0;
+        newSubPayload.active_days_quota = activeDaysTotal;
+      }
+    }
+
     const { data: newSub, error: createError } = await supabase
       .from("driver_subscriptions")
-      .insert({
-        driver_id:         driver_id,
-        plan:              plan,
-        amount:            planConfig.amount,
-        status:            newStatus,
-        started_at:        newStartDate.toISOString(),
-        ends_at:           newEndDate.toISOString(),
-        payment_method:    paymentMethod,
-        payment_reference: paymentReference,
-        auto_renew:        true,
-      })
+      .insert(newSubPayload)
       .select()
       .single();
 
@@ -267,8 +317,13 @@ serve(async (req: Request) => {
 
     // 6. Send notification to driver
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const newPeriodDesc = newEndsAt
+      ? `New period: ${new Date(newEndsAt).toDateString()}.`
+      : useActiveDays
+      ? `Days renewed: ${activeDaysTotal ?? "unlimited"}.`
+      : "Subscription renewed.";
     const notifBody = paymentMethod === "chapa" && checkoutUrl
-      ? `Your ${plan} subscription has been renewed automatically. New period: ${newEndDate.toDateString()}.`
+      ? `Your ${plan} subscription has been renewed automatically. ${newPeriodDesc}`
       : `Your ${plan} subscription renewal has been initiated. Please complete payment to continue driving. Ref: ${paymentReference}`;
 
     await fetch(`${supabaseUrl}/functions/v1/send-notification`, {
@@ -285,7 +340,7 @@ serve(async (req: Request) => {
         data:    {
           subscription_id:   newSub.id,
           plan,
-          ends_at:           newEndDate.toISOString(),
+          ends_at:           newEndsAt,
           checkout_url:      checkoutUrl,
           payment_reference: paymentReference,
         },
@@ -299,7 +354,7 @@ serve(async (req: Request) => {
         success:         true,
         subscription_id: newSub.id,
         plan,
-        ends_at:         newEndDate.toISOString(),
+        ends_at:         newEndsAt,
         payment_method:  paymentMethod,
         checkout_url:    checkoutUrl,
       }),
