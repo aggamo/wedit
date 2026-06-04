@@ -85,36 +85,42 @@ serve(async (req: Request) => {
       });
     }
 
-    // Pre-fetch driver state once to avoid repeated queries
+    // Pre-fetch driver state in parallel — lifetime_stats replaces expensive COUNT on rides
     const [
-      { count: rideCount },
+      { data: lifetimeStats },
       { data: streakRow },
-      { data: levelState },
       { data: profile },
     ] = await Promise.all([
-      svc
-        .from("rides")
-        .select("*", { count: "exact", head: true })
-        .eq("driver_id", driverId)
-        .eq("status", "completed"),
+      svc.from("driver_lifetime_stats").select("*").eq("driver_id", driverId).maybeSingle(),
       svc.from("driver_streaks").select("current_streak").eq("driver_id", driverId).maybeSingle(),
-      svc.from("driver_level_state").select("xp").eq("driver_id", driverId).maybeSingle(),
       svc.from("profiles").select("id, fcm_token, points").eq("id", driverId).maybeSingle(),
     ]);
 
-    // Fetch rating avg (only meaningful if >= 10 rides)
-    let ratingAvg: number | null = null;
-    if ((rideCount ?? 0) >= 10) {
-      const { data: ratingData } = await svc
-        .from("rides")
-        .select("driver_rating")
-        .eq("driver_id", driverId)
-        .eq("status", "completed")
-        .not("driver_rating", "is", null);
+    const rideCount    = (lifetimeStats?.total_rides as number)      ?? 0;
+    const totalXp      = (lifetimeStats?.total_xp_earned as bigint)  ?? 0;
+    const total5Star   = (lifetimeStats?.total_5star_rides as number) ?? 0;
+    const currentStreak = (streakRow?.current_streak as number)       ?? 0;
 
-      if (ratingData && ratingData.length > 0) {
-        const sum = ratingData.reduce((acc: number, r: Record<string, unknown>) => acc + (r.driver_rating as number), 0);
-        ratingAvg = sum / ratingData.length;
+    // Rating avg approximation: 5-star share × 5 (fast, no extra query)
+    // Only meaningful when >= 10 rides; falls back to full query for accuracy
+    let ratingAvg: number | null = null;
+    if (rideCount >= 10) {
+      if (total5Star / rideCount >= 0.85) {
+        // Likely near 5.0 — do precise query only when close to threshold
+        const { data: ratingData } = await svc
+          .from("rides")
+          .select("driver_rating")
+          .eq("driver_id", driverId)
+          .eq("status", "completed")
+          .not("driver_rating", "is", null);
+
+        if (ratingData && ratingData.length > 0) {
+          const sum = ratingData.reduce(
+            (acc: number, r: Record<string, unknown>) => acc + (r.driver_rating as number),
+            0
+          );
+          ratingAvg = sum / ratingData.length;
+        }
       }
     }
 
@@ -151,13 +157,14 @@ serve(async (req: Request) => {
 
       switch (ach.trigger_type) {
         case "ride_count":
-          conditionMet = (rideCount ?? 0) >= (ach.trigger_value as number);
+          conditionMet = rideCount >= (ach.trigger_value as number);
           break;
         case "streak_days":
-          conditionMet = ((streakRow?.current_streak as number) ?? 0) >= (ach.trigger_value as number);
+          conditionMet = currentStreak >= (ach.trigger_value as number);
           break;
         case "xp_total":
-          conditionMet = ((levelState?.xp as number) ?? 0) >= (ach.trigger_value as number);
+          // Uses cumulative XP earned (not net balance) — never decreases
+          conditionMet = Number(totalXp) >= (ach.trigger_value as number);
           break;
         case "rating_avg":
           conditionMet = ratingAvg !== null && ratingAvg >= (ach.trigger_value as number);

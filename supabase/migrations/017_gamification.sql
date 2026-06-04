@@ -874,3 +874,117 @@ CREATE POLICY "driver_goal_state_admin_all"
 CREATE POLICY "audit_log_admin_all"
   ON admin_audit_log FOR ALL
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
+-- =============================================================
+-- driver_lifetime_stats
+-- Denormalized running totals — updated via DB triggers.
+-- Achievement checks read one row instead of scanning rides.
+-- =============================================================
+CREATE TABLE IF NOT EXISTS driver_lifetime_stats (
+  driver_id           uuid        PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+  total_rides         bigint      NOT NULL DEFAULT 0,
+  total_km            numeric(12,2) NOT NULL DEFAULT 0,
+  total_income_etb    numeric(14,2) NOT NULL DEFAULT 0,
+  total_xp_earned     bigint      NOT NULL DEFAULT 0, -- cumulative only (never subtracted)
+  best_streak         integer     NOT NULL DEFAULT 0,
+  total_subscriptions integer     NOT NULL DEFAULT 0,
+  total_5star_rides   bigint      NOT NULL DEFAULT 0,
+  total_peak_rides    bigint      NOT NULL DEFAULT 0,
+  first_ride_at       timestamptz,
+  last_ride_at        timestamptz,
+  updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lifetime_stats_rides ON driver_lifetime_stats(total_rides DESC);
+
+-- Trigger: rides completed → update ride/km/income stats
+CREATE OR REPLACE FUNCTION update_lifetime_stats_on_ride()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
+    INSERT INTO driver_lifetime_stats (
+      driver_id, total_rides, total_km, total_income_etb,
+      total_5star_rides, first_ride_at, last_ride_at
+    ) VALUES (
+      NEW.driver_id,
+      1,
+      COALESCE(NEW.distance_km, 0),
+      COALESCE(NEW.fare_amount, 0),
+      CASE WHEN NEW.driver_rating = 5 THEN 1 ELSE 0 END,
+      NEW.completed_at,
+      NEW.completed_at
+    )
+    ON CONFLICT (driver_id) DO UPDATE SET
+      total_rides      = driver_lifetime_stats.total_rides + 1,
+      total_km         = driver_lifetime_stats.total_km + COALESCE(NEW.distance_km, 0),
+      total_income_etb = driver_lifetime_stats.total_income_etb + COALESCE(NEW.fare_amount, 0),
+      total_5star_rides = driver_lifetime_stats.total_5star_rides +
+                          CASE WHEN NEW.driver_rating = 5 THEN 1 ELSE 0 END,
+      first_ride_at    = COALESCE(driver_lifetime_stats.first_ride_at, NEW.completed_at),
+      last_ride_at     = NEW.completed_at,
+      updated_at       = now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER rides_update_lifetime_stats
+  AFTER UPDATE ON rides
+  FOR EACH ROW EXECUTE FUNCTION update_lifetime_stats_on_ride();
+
+-- Trigger: positive XP earned → accumulate total_xp_earned
+CREATE OR REPLACE FUNCTION update_lifetime_xp()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.amount > 0 THEN
+    INSERT INTO driver_lifetime_stats (driver_id, total_xp_earned)
+    VALUES (NEW.driver_id, NEW.amount)
+    ON CONFLICT (driver_id) DO UPDATE SET
+      total_xp_earned = driver_lifetime_stats.total_xp_earned + NEW.amount,
+      updated_at      = now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER xp_update_lifetime_stats
+  AFTER INSERT ON driver_xp_transactions
+  FOR EACH ROW EXECUTE FUNCTION update_lifetime_xp();
+
+-- Trigger: new active subscription → increment counter
+CREATE OR REPLACE FUNCTION update_lifetime_subscriptions()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.status = 'active' THEN
+    INSERT INTO driver_lifetime_stats (driver_id, total_subscriptions)
+    VALUES (NEW.driver_id, 1)
+    ON CONFLICT (driver_id) DO UPDATE SET
+      total_subscriptions = driver_lifetime_stats.total_subscriptions + 1,
+      updated_at          = now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER subs_update_lifetime_stats
+  AFTER INSERT ON driver_subscriptions
+  FOR EACH ROW EXECUTE FUNCTION update_lifetime_subscriptions();
+
+-- =============================================================
+-- RLS for driver_lifetime_stats
+-- =============================================================
+ALTER TABLE driver_lifetime_stats ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "lifetime_stats_select_own"
+  ON driver_lifetime_stats FOR SELECT
+  USING (auth.uid() = driver_id);
+
+CREATE POLICY "lifetime_stats_admin_all"
+  ON driver_lifetime_stats FOR ALL
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
