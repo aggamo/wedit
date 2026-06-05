@@ -70,6 +70,18 @@ class SupabaseAdminService {
     final updateData = <String, dynamic>{'status': status};
     if (reason != null) updateData['rejection_reason'] = reason;
     await _client.from('drivers').update(updateData).eq('id', driverId);
+
+    if (status == 'suspended' || status == 'rejected') {
+      _client.functions.invoke('send-notification', body: {
+        'user_id': driverId,
+        'title': status == 'suspended' ? 'تم تعليق حسابك' : 'تم رفض طلبك',
+        'body': status == 'suspended'
+            ? 'تم تعليق حسابك مؤقتاً من قبل الإدارة. للاستفسار تواصل مع الدعم.'
+            : 'تم رفض طلب انضمامك. يمكنك التواصل مع الدعم للمزيد من المعلومات.',
+        'type': 'account_status_change',
+        'data': {'new_status': status},
+      }).ignore();
+    }
   }
 
   Future<void> approveDriverDocument(String docId, bool approved,

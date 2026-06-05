@@ -90,6 +90,7 @@ serve(async (req: Request) => {
     }
 
     const minRides          = settings.active_day_min_rides           ?? 3;
+    const minHours          = settings.active_day_min_hours            ?? 2;
     const minRevenue        = settings.active_day_min_revenue_etb      ?? 0;
     const inactiveXpPenalty = settings.inactive_xp_penalty_per_day    ?? 10;
     const decayDays         = settings.inactive_level_decay_days       ?? 30;
@@ -172,8 +173,13 @@ serve(async (req: Request) => {
         const ridesYesterday  = activityRow?.rides_count  ?? 0;
         const incomeYesterday = Number(activityRow?.income_etb ?? 0);
 
+        // Proxy for active hours until driver_activity_sessions tracking exists:
+        // 0.4 h/ride ≈ 24 min average trip + wait time.
+        const estimatedHours = ridesYesterday * 0.4;
+
         const wasActive =
           ridesYesterday >= minRides &&
+          estimatedHours >= minHours &&
           (minRevenue <= 0 || incomeYesterday >= minRevenue);
 
         // Fetch current streak (last_active_date lives in driver_streaks)

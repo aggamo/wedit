@@ -52,6 +52,23 @@ class FleetNotifier extends StateNotifier<FleetState> {
           .from('fleet_vehicles')
           .update({'is_active': isActive})
           .eq('id', vehicleId);
+
+      if (!isActive) {
+        // Notify the driver assigned to this vehicle, if any.
+        final rows = await _supabase
+            .from('drivers')
+            .select('id')
+            .eq('fleet_vehicle_id', vehicleId)
+            .limit(1);
+        if (rows is List && rows.isNotEmpty) {
+          _supabase.functions.invoke('send-notification', body: {
+            'user_id': rows.first['id'] as String,
+            'title': 'تم تعطيل سيارتك',
+            'body': 'قام صاحب الأسطول بتعطيل السيارة المخصصة لك مؤقتاً.',
+            'type': 'vehicle_deactivated',
+          }).ignore();
+        }
+      }
     } catch (e) {
       state = state.copyWith(error: e.toString());
     } finally {
@@ -130,6 +147,13 @@ class FleetNotifier extends StateNotifier<FleetState> {
           .from('drivers')
           .update({'fleet_owner_id': null})
           .eq('id', driverId);
+
+      _supabase.functions.invoke('send-notification', body: {
+        'user_id': driverId,
+        'title': 'تم فصلك من الأسطول',
+        'body': 'قام صاحب الأسطول بفصلك. يمكنك الاستمرار كسائق مستقل.',
+        'type': 'fleet_removed',
+      }).ignore();
     } catch (e) {
       state = state.copyWith(error: e.toString());
     } finally {
