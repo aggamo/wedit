@@ -97,6 +97,8 @@ serve(async (req: Request) => {
   const svc = createClient(supabaseUrl, serviceRoleKey);
 
   try {
+    console.log(JSON.stringify({ fn: "process-ride-completion", event: "start", ride_id: body.ride_id }));
+
     // 1. Fetch ride — use actual column names from rides table
     const { data: ride, error: rideErr } = await svc
       .from("rides")
@@ -299,6 +301,8 @@ serve(async (req: Request) => {
         { onConflict: "driver_id", ignoreDuplicates: true }
       ),
     ]);
+
+    console.log(JSON.stringify({ fn: "process-ride-completion", event: "points_awarded", ride_id: ride.id, driver_id: ride.driver_id, reward_points: rewardPoints, xp: xpGained }));
 
     // 12. Fire check-achievements (non-blocking, scope=ride)
     fetch(`${supabaseUrl}/functions/v1/check-achievements`, {

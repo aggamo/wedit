@@ -196,6 +196,7 @@ serve(async (req: Request) => {
       }
 
       unlockedIds.push(ach.id as string);
+      console.log(JSON.stringify({ fn: "check-achievements", event: "achievement_unlocked", driver_id: driverId, achievement_id: ach.id, name: ach.name_ar }));
 
       // Award reward points — atomic RPC (no race condition)
       if (ach.reward_points && (ach.reward_points as number) > 0) {

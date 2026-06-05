@@ -171,6 +171,8 @@ serve(async (req: Request) => {
       .update({ streak_frozen: true, streak_frozen_at: frozenAt })
       .eq("driver_id", driverId);
 
+    console.log(JSON.stringify({ fn: "freeze-subscription", event: "frozen", driver_id: driverId, subscription_id: subscription.id }));
+
     return new Response(
       JSON.stringify({ success: true, frozen_at: frozenAt }),
       { status: 200, headers: JSON_HEADERS }

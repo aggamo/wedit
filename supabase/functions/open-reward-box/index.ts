@@ -97,7 +97,7 @@ serve(async (req: Request) => {
     // 1. Fetch the box to validate it exists
     const { data: box, error: boxErr } = await svc
       .from("reward_boxes")
-      .select("id, name_ar, fallback_prize_id")
+      .select("id, name_ar, fallback_prize_id, pity_threshold, pity_prize_id")
       .eq("id", body.box_id)
       .single();
 
@@ -127,6 +127,20 @@ serve(async (req: Request) => {
       });
     }
 
+    // Gate: driver must have completed 3+ consecutive active days to open a box
+    const { data: streakRow } = await svc
+      .from("driver_streaks")
+      .select("current_streak")
+      .eq("driver_id", driverId)
+      .maybeSingle();
+
+    if ((streakRow?.current_streak ?? 0) < 3) {
+      return new Response(
+        JSON.stringify({ error: "تحتاج إلى 3 أيام نشطة متتالية لفتح الصندوق" }),
+        { status: 403, headers: JSON_HEADERS }
+      );
+    }
+
     // 3. Fetch available box prizes
     const { data: allPrizes, error: prizesErr } = await svc
       .from("box_prizes")
@@ -145,7 +159,31 @@ serve(async (req: Request) => {
       p.quantity_available === null || p.quantity_available > (p.quantity_used ?? 0)
     );
 
-    let selectedPrize: BoxPrize | null = weightedRandom(availablePrizes);
+    // Read pity state for this driver+box
+    const { data: pityRow } = await svc
+      .from("driver_box_pity")
+      .select("opens_since_last_rare")
+      .eq("driver_id", driverId)
+      .eq("box_id", body.box_id)
+      .maybeSingle();
+
+    const opensSoFar = (pityRow?.opens_since_last_rare ?? 0);
+    const pitied =
+      (box.pity_threshold as number | null) != null &&
+      (box.pity_prize_id  as string | null) != null &&
+      opensSoFar >= (box.pity_threshold as number);
+
+    let selectedPrize: BoxPrize | null;
+    if (pitied) {
+      const { data: pityPrize } = await svc
+        .from("box_prizes")
+        .select("id, box_id, prize_type, value, description_ar, weight, quantity_available, quantity_used, requires_admin_approval")
+        .eq("id", box.pity_prize_id as string)
+        .single();
+      selectedPrize = pityPrize ?? weightedRandom(availablePrizes);
+    } else {
+      selectedPrize = weightedRandom(availablePrizes);
+    }
 
     // 5. Fallback prize if none available
     if (!selectedPrize && box.fallback_prize_id) {
@@ -184,21 +222,34 @@ serve(async (req: Request) => {
       });
     }
 
+    // Update pity counter: reset on pity trigger, otherwise increment
+    await svc.from("driver_box_pity").upsert(
+      {
+        driver_id:             driverId,
+        box_id:                body.box_id,
+        opens_since_last_rare: pitied ? 0 : opensSoFar + 1,
+      },
+      { onConflict: "driver_id,box_id" }
+    );
+
+    console.log(JSON.stringify({
+      fn:         "open-reward-box",
+      event:      "prize_selected",
+      driver_id:  driverId,
+      box_id:     body.box_id,
+      prize_type: selectedPrize.prize_type,
+      pitied,
+    }));
+
     // 7. Apply prize immediately if no admin approval required
     if (deliveredNow) {
       switch (selectedPrize.prize_type) {
         case "reward_points": {
-          const { data: profileRow } = await svc
-            .from("profiles")
-            .select("points")
-            .eq("id", driverId)
-            .single();
-
-          const currentPoints = (profileRow?.points as number) ?? 0;
-          await svc
-            .from("profiles")
-            .update({ points: currentPoints + selectedPrize.value })
-            .eq("id", driverId);
+          // Atomic increment — avoids SELECT+UPDATE race condition
+          await svc.rpc("increment_driver_points", {
+            p_driver_id: driverId,
+            p_amount:    selectedPrize.value,
+          });
 
           await svc.from("points_transactions").insert({
             user_id:     driverId,

@@ -142,6 +142,8 @@ serve(async (req: Request) => {
     const errors: string[] = [];
     const notifications: Array<{ user_id: string; title: string; body: string; type: string }> = [];
 
+    console.log(JSON.stringify({ fn: "process-active-days", event: "start", date: yesterdayStr, drivers: (activeSubs as unknown[]).length }));
+
     // 4. Process each driver
     for (const sub of (activeSubs as unknown as DriverSubscription[]) ?? []) {
       try {
@@ -197,6 +199,7 @@ serve(async (req: Request) => {
         if (wasActive) {
           // ── Active day ─────────────────────────────────────────
           activeDaysCounted++;
+          console.log(JSON.stringify({ fn: "process-active-days", event: "active_day", driver_id: driverId, rides: ridesYesterday }));
 
           const newActiveDaysUsed = (sub.active_days_used ?? 0) + 1;
           const subUpdate: Record<string, unknown> = {
@@ -367,6 +370,8 @@ serve(async (req: Request) => {
         errors.push(`driver ${sub.driver_id}: ${String(driverErr)}`);
       }
     }
+
+    console.log(JSON.stringify({ fn: "process-active-days", event: "done", processed, active_days_counted: activeDaysCounted, errors: errors.length }));
 
     // 5. Fire notifications (non-blocking)
     for (const notif of notifications) {
