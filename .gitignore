@@ -7,3 +7,4 @@ key.properties
 google-services.json
 GoogleService-Info.plist
 firebase_options.dart.bak
+**/firebase_options.dart

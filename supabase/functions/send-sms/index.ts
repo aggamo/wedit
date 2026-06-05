@@ -92,6 +92,27 @@ function normalisePhone(phone: string): string {
   return `+${digits}`;
 }
 
+// ── Retry helper ──────────────────────────────────────────────────────────────
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 1000
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** (attempt - 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
 // ── Gateway dispatch ──────────────────────────────────────────────────────────
 
 const AT_ENDPOINT = "https://api.africastalking.com/version1/messaging";
@@ -371,21 +392,13 @@ serve(async (req: Request) => {
 
   try {
     if (smsProvider === "africastalking") {
-      ({ ok, providerResponse } = await sendViaAfricasTalking(
-        recipientPhone,
-        messageBody,
-        apiKey!,
-        senderId,
-        atUsername
+      ({ ok, providerResponse } = await withRetry(() =>
+        sendViaAfricasTalking(recipientPhone, messageBody, apiKey!, senderId, atUsername)
       ));
     } else {
       // generic (default)
-      ({ ok, providerResponse } = await sendViaGenericGateway(
-        recipientPhone,
-        messageBody,
-        gatewayUrl!,
-        apiKey!,
-        senderId
+      ({ ok, providerResponse } = await withRetry(() =>
+        sendViaGenericGateway(recipientPhone, messageBody, gatewayUrl!, apiKey!, senderId)
       ));
     }
 
