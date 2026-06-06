@@ -286,30 +286,24 @@ serve(async (req: Request) => {
           }
           break;
         }
-        case "priority_hours":
+        case "priority_hours": {
           // Record the grant — operational logic handled by ride dispatch
-          await svc.from("driver_priority_grants").insert({
+          const { error: priorityErr } = await svc.from("driver_priority_grants").insert({
             driver_id:  driverId,
             hours:      selectedPrize.value,
             source:     "reward_box",
             granted_at: new Date().toISOString(),
-            expires_at: null, // admin can set expiry
-          }).then(() => {}).catch(() => {}); // table may not exist yet, ignore
-          break;
-        case "freeze_day": {
-          // Increment freeze allowance for current month
-          await svc
-            .from("driver_subscriptions")
-            .update({
-              freeze_extra_days: svc.rpc ? undefined : undefined, // handled via raw update below
-            })
-            .eq("driver_id", driverId)
-            .eq("status", "active")
-            .then(() => {});
-
-          // Just record in driver_box_openings (already done above)
+            expires_at: null,
+          });
+          if (priorityErr) {
+            console.error("priority_grants insert failed:", priorityErr.message);
+          }
           break;
         }
+        case "freeze_day":
+          // Recorded in driver_box_openings (already done above).
+          // Extra freeze allowance is checked by freeze-subscription via subscription_freezes count.
+          break;
       }
     }
 
