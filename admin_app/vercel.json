@@ -1,5 +1,5 @@
 {
-  "buildCommand": "flutter build web --release --base-href=/",
+  "buildCommand": "git clone https://github.com/flutter/flutter.git -b stable --depth 1 _flutter && export PATH=\"$PATH:$(pwd)/_flutter/bin\" && flutter config --no-analytics && flutter build web --release --base-href=/",
   "outputDirectory": "build/web",
   "framework": null,
   "rewrites": [{ "source": "/((?!.*\\.).*)", "destination": "/index.html" }],
