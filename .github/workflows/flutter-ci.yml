@@ -47,7 +47,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: success()
         with:
           name: driver-app-apk
@@ -94,7 +94,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: success()
         with:
           name: passenger-app-apk
@@ -141,7 +141,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload Web build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: success()
         with:
           name: admin-app-web
