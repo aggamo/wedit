@@ -528,7 +528,7 @@ class _FormCard extends StatelessWidget {
                 child: ElevatedButton.icon(
                   onPressed: isLoading ? null : onSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -611,7 +611,7 @@ class _MapCard extends StatelessWidget {
             color: Colors.white,
             child: Row(
               children: [
-                Icon(Icons.map, color: AppTheme.primaryColor, size: 20),
+                Icon(Icons.map, color: AppColors.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   addingDestination ? 'تحديد الوجهة' : 'تحديد موقع الراكب',
@@ -721,7 +721,7 @@ class _SuccessCard extends StatelessWidget {
               child: ElevatedButton.icon(
                 onPressed: onNewRide,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),

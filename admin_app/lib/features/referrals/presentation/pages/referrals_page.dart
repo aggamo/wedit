@@ -29,12 +29,14 @@ final referralStatsProvider =
   try {
     final all = await supabase
         .from('referrals')
-        .select('id', const FetchOptions(count: CountOption.exact, head: true));
+        .select('id')
+        .count(CountOption.exact);
 
     final rewarded = await supabase
         .from('referrals')
-        .select('id', const FetchOptions(count: CountOption.exact, head: true))
-        .eq('status', 'rewarded');
+        .select('id')
+        .eq('status', 'rewarded')
+        .count(CountOption.exact);
 
     final pointsData = await supabase
         .from('referrals')

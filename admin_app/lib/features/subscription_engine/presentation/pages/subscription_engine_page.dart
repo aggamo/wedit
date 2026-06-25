@@ -41,7 +41,7 @@ final activeFreezeProvider =
   return Supabase.instance.client
       .from('subscription_freezes')
       .select('*, profiles!driver_id(full_name), freeze_reasons(label_ar)')
-      .is_('unfrozen_at', null)
+      .isFilter('unfrozen_at', null)
       .order('frozen_at', ascending: false)
       .then((r) => List<Map<String, dynamic>>.from(r));
 });

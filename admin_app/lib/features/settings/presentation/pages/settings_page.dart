@@ -282,8 +282,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (doc != null) {
         final countResponse = await supabase
             .from('legal_document_acceptances')
-            .select('id', const FetchOptions(count: CountOption.exact, head: true))
-            .eq('document_id', doc['id']);
+            .select('id')
+            .eq('document_id', doc['id'])
+            .count(CountOption.exact);
         count = countResponse.count ?? 0;
       }
 
