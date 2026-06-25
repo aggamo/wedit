@@ -8,7 +8,7 @@
 <meta property="og:title" content="wedit — Your Ride, Anytime in Addis Ababa">
 <meta property="og:description" content="Fast, safe, and affordable rides in Addis Ababa. Coming soon.">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%9A%97</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><defs><linearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22><stop offset=%220%22 stop-color=%22%23225da3%22/><stop offset=%221%22 stop-color=%22%23eaa128%22/></linearGradient></defs><rect width=%2232%22 height=%2232%22 rx=%229%22 fill=%22url(%23g)%22/><path d=%22M3 22c4-2 5-7 9-7s5 5 9 5 5-5 8-7%22 stroke=%22%23fff%22 stroke-width=%223%22 stroke-linecap=%22round%22 fill=%22none%22/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Noto+Sans+Ethiopic:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -77,6 +77,7 @@
     gap: 6px;
   }
   .logo span.dot { color: var(--gold); }
+  .logo-mark { width: 28px; height: 28px; flex-shrink: 0; }
   .nav-links {
     display: flex;
     gap: 28px;
@@ -401,9 +402,23 @@
 </head>
 <body class="lang-en">
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo-mark" viewBox="0 0 32 32">
+    <defs>
+      <linearGradient id="logo-mark-grad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#225da3"/>
+        <stop offset="1" stop-color="#eaa128"/>
+      </linearGradient>
+    </defs>
+    <rect width="32" height="32" rx="9" fill="url(#logo-mark-grad)"/>
+    <path d="M3 22c4-2 5-7 9-7s5 5 9 5 5-5 8-7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+    <circle cx="23" cy="8" r="3" fill="#2c7737"/>
+  </symbol>
+</svg>
+
 <header>
   <nav class="nav container" id="nav">
-    <div class="logo">wedit<span class="dot">.</span></div>
+    <div class="logo"><svg class="logo-mark"><use href="#logo-mark"/></svg>wedit<span class="dot">.</span></div>
     <ul class="nav-links">
       <li><a href="#features"><span class="i18n-en">Features</span><span class="i18n-am">ባህሪያት</span></a></li>
       <li><a href="#how"><span class="i18n-en">How It Works</span><span class="i18n-am">እንዴት ይሰራል</span></a></li>
@@ -708,7 +723,7 @@
   <div class="container">
     <div class="footer-grid">
       <div class="footer-about">
-        <div class="logo">wedit<span class="dot">.</span></div>
+        <div class="logo"><svg class="logo-mark"><use href="#logo-mark"/></svg>wedit<span class="dot">.</span></div>
         <p>
           <span class="i18n-en">A ride-hailing platform built for Addis Ababa — fast, safe, and affordable rides for everyone, with a rewarding experience for drivers.</span>
           <span class="i18n-am">ለአዲስ አበባ የተሰራ የመንዳት መድረክ — ለሁሉም ፈጣን፣ ደህንነቱ የተጠበቀ እና ተመጣጣኝ ጉዞ፣ ለሹፈሮችም የሚክስ ተሞክሮ።</span>
