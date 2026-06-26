@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
@@ -41,7 +43,7 @@ class SupabaseService {
   StorageFileApi get avatarsStorage => client.storage.from('avatars');
 
   /// Upload a file and get its public URL
-  Future<String> uploadAvatar(String userId, List<int> bytes, String extension) async {
+  Future<String> uploadAvatar(String userId, Uint8List bytes, String extension) async {
     final path = '$userId/avatar.$extension';
     await avatarsStorage.uploadBinary(
       path,

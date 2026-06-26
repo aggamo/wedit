@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../../../core/constants/app_constants.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../providers/leaderboard_provider.dart';
 import '../widgets/leaderboard_list_item.dart';
 import '../widgets/my_rank_card.dart';

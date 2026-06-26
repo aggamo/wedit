@@ -1,4 +1,5 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
+import 'package:supabase_flutter/supabase_flutter.dart' as supa show AuthException;
 
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/supabase/supabase_service.dart';
@@ -25,7 +26,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
         phone: phone,
         shouldCreateUser: true,
       );
-    } on AuthException catch (e) {
+    } on supa.AuthException catch (e) {
       throw AuthException(message: e.message, code: e.statusCode);
     } catch (e) {
       throw ServerException(message: e.toString());
@@ -52,7 +53,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
       // Fetch or create profile
       final profile = await _getOrCreateProfile(supabaseUser);
       return profile;
-    } on AuthException catch (e) {
+    } on supa.AuthException catch (e) {
       throw AuthException(message: e.message, code: e.statusCode);
     } catch (e) {
       if (e is AuthException) rethrow;
@@ -114,7 +115,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
   Future<void> signOut() async {
     try {
       await _supabase.client.auth.signOut();
-    } on AuthException catch (e) {
+    } on supa.AuthException catch (e) {
       throw AuthException(message: e.message);
     } catch (e) {
       throw ServerException(message: e.toString());

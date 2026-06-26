@@ -263,7 +263,7 @@ class _EditPlanDialogState extends State<_EditPlanDialog> {
         'is_active': _isActive,
         'features': features,
       }).eq('id', widget.plan['id']);
-      widget.ref.refresh(subscriptionPlansProvider);
+      widget.ref.invalidate(subscriptionPlansProvider);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -433,7 +433,7 @@ class _SettingTileState extends State<_SettingTile> {
           .from('subscription_settings')
           .update({'value': numVal})
           .eq('key', widget.setting['key']);
-      widget.ref.refresh(subscriptionSettingsProvider);
+      widget.ref.invalidate(subscriptionSettingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -540,7 +540,7 @@ class _FreezeReasonsTabState extends ConsumerState<_FreezeReasonsTab> {
           .from('freeze_reasons')
           .insert({'label_ar': label, 'sort_order': 999});
       _addCtrl.clear();
-      ref.refresh(freezeReasonsProvider);
+      ref.invalidate(freezeReasonsProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -559,7 +559,7 @@ class _FreezeReasonsTabState extends ConsumerState<_FreezeReasonsTab> {
           .from('freeze_reasons')
           .delete()
           .eq('id', id);
-      ref.refresh(freezeReasonsProvider);
+      ref.invalidate(freezeReasonsProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -674,7 +674,7 @@ class _FreezeReasonsTabState extends ConsumerState<_FreezeReasonsTab> {
                     .from('freeze_reasons')
                     .update({'label_ar': ctrl.text.trim()})
                     .eq('id', reason['id']);
-                ref.refresh(freezeReasonsProvider);
+                ref.invalidate(freezeReasonsProvider);
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -827,7 +827,7 @@ class _UnfreezeButtonState extends State<_UnfreezeButton> {
           'admin_override': true,
         },
       );
-      widget.ref.refresh(activeFreezeProvider);
+      widget.ref.invalidate(activeFreezeProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

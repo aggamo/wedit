@@ -369,9 +369,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isOnline = ref.watch(onlineStatusProvider);
-    final driver = ref.watch(currentDriverProvider);
-    final incomingRequests = ref.watch(incomingRequestsProvider);
-    final currentRide = ref.watch(currentRideProvider);
 
     // Listen for incoming requests
     ref.listen(incomingRequestsProvider, (_, next) {

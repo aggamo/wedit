@@ -60,7 +60,7 @@ class FleetNotifier extends StateNotifier<FleetState> {
             .select('id')
             .eq('fleet_vehicle_id', vehicleId)
             .limit(1);
-        if (rows is List && rows.isNotEmpty) {
+        if (rows.isNotEmpty) {
           _supabase.functions.invoke('send-notification', body: {
             'user_id': rows.first['id'] as String,
             'title': 'تم تعطيل سيارتك',

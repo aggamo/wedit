@@ -95,12 +95,15 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
 
   @override
   Stream<RideEntity?> streamCurrentRide(String driverId) {
+    const activeStatuses = ['accepted', 'driver_arrived', 'in_progress'];
     return _supabase
         .from(AppConstants.ridesTable)
         .stream(primaryKey: ['id'])
         .eq('driver_id', driverId)
-        .inFilter('status', ['accepted', 'driver_arrived', 'in_progress'])
-        .map((data) => data.isEmpty ? null : _mapToRide(data.first));
+        .map((data) {
+          final active = data.where((r) => activeStatuses.contains(r['status']));
+          return active.isEmpty ? null : _mapToRide(active.first);
+        });
   }
 
   @override

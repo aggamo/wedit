@@ -21,7 +21,6 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> {
   GoogleMapController? _mapController;
   Position? _driverPosition;
   final Set<Polyline> _polylines = {};
-  final Set<Marker> _markers = {};
   bool _isArriving = false;
 
   @override
@@ -100,7 +99,6 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> {
   @override
   Widget build(BuildContext context) {
     final currentRide = ref.watch(currentRideProvider);
-    final rideState = ref.watch(rideNotifierProvider);
 
     return currentRide.when(
       data: (ride) {

@@ -8,7 +8,6 @@ import 'package:intl/intl.dart';
 import '../../../../core/providers/admin_provider.dart';
 import '../../../../core/services/supabase_admin_service.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/widgets/data_table_widget.dart';
 
 final _adminSvcProvider = Provider<SupabaseAdminService>((ref) {
   return SupabaseAdminService(ref.watch(supabaseClientProvider));
@@ -655,7 +654,7 @@ class _SectionB_PrizeSettingsState
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) setState(() => _saved = false);
       });
-      ref.refresh(competitionSettingsProvider);
+      ref.invalidate(competitionSettingsProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1062,7 +1061,7 @@ class _SectionC_RaffleSettingsState
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) setState(() => _saved = false);
       });
-      ref.refresh(competitionSettingsProvider);
+      ref.invalidate(competitionSettingsProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1263,7 +1262,7 @@ class _SectionD_RankingCriteriaState
                                     await ref
                                         .read(_adminSvcProvider)
                                         .upsertCompetitionSettings(updated);
-                                    ref.refresh(
+                                    ref.invalidate(
                                         competitionSettingsProvider);
                                     if (mounted) {
                                       ScaffoldMessenger.of(context)
@@ -1449,7 +1448,7 @@ class _SectionE_PrivacySettingsState
                                     await ref
                                         .read(_adminSvcProvider)
                                         .upsertCompetitionSettings(updated);
-                                    ref.refresh(
+                                    ref.invalidate(
                                         competitionSettingsProvider);
                                     if (mounted) {
                                       ScaffoldMessenger.of(context)
@@ -1816,7 +1815,7 @@ class _SectionF_WinnersHistory extends ConsumerWidget {
               Navigator.pop(ctx);
               final service = ref.read(_adminSvcProvider);
               await service.markPrizePaid(winner['id'] as String);
-              ref.refresh(competitionWinnersProvider);
+              ref.invalidate(competitionWinnersProvider);
             },
             icon: const Icon(Icons.check, size: 16),
             label: const Text('تأكيد الدفع'),
@@ -1853,7 +1852,7 @@ class _SectionF_WinnersHistory extends ConsumerWidget {
               Navigator.pop(ctx);
               try {
                 await ref.read(_adminSvcProvider).runRaffleManually();
-                ref.refresh(competitionWinnersProvider);
+                ref.invalidate(competitionWinnersProvider);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(

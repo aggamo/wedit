@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../../../core/providers/admin_provider.dart';
 import '../../../../core/services/supabase_admin_service.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/widgets/data_table_widget.dart';
 
 final _adminSvcProvider = Provider<SupabaseAdminService>((ref) {
   return SupabaseAdminService(ref.watch(supabaseClientProvider));
@@ -216,16 +215,16 @@ class _PendingTransfersTab extends ConsumerWidget {
                               final service = ref.read(_adminSvcProvider);
                               await service
                                   .confirmBankTransfer(t['id'] as String);
-                              ref.refresh(pendingTransfersProvider);
-                              ref.refresh(pendingCountsProvider);
+                              ref.invalidate(pendingTransfersProvider);
+                              ref.invalidate(pendingCountsProvider);
                             },
                             onReject: (reason) async {
                               final service = ref.read(_adminSvcProvider);
                               await service.rejectBankTransfer(
                                   t['id'] as String,
                                   reason: reason);
-                              ref.refresh(pendingTransfersProvider);
-                              ref.refresh(pendingCountsProvider);
+                              ref.invalidate(pendingTransfersProvider);
+                              ref.invalidate(pendingCountsProvider);
                             },
                           ),
                         );

@@ -400,10 +400,10 @@ class RideRemoteDatasourceImpl implements RideRemoteDatasource {
         },
       );
       return (result as num).toDouble();
-    } on PostgrestException catch (e) {
+    } on PostgrestException {
       // Fallback to local calculation if RPC doesn't exist
       return _localPriceEstimate(distanceKm, vehicleType);
-    } catch (e) {
+    } catch (_) {
       return _localPriceEstimate(distanceKm, vehicleType);
     }
   }

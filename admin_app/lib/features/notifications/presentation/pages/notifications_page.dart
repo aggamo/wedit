@@ -80,7 +80,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         _bodyCtrl.clear();
         _userIdCtrl.clear();
         setState(() => _target = 'all');
-        ref.refresh(sentNotificationsProvider);
+        ref.invalidate(sentNotificationsProvider);
       }
     } catch (e) {
       if (mounted) {

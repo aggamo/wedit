@@ -288,7 +288,7 @@ class _EditLevelDialogState extends State<_EditLevelDialog> {
         'badge_color': _colorCtrl.text.trim(),
         'benefits': benefits,
       }).eq('id', widget.level['id']);
-      widget.ref.refresh(levelDefinitionsProvider);
+      widget.ref.invalidate(levelDefinitionsProvider);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -483,7 +483,7 @@ class _PointRulesTabState extends ConsumerState<_PointRulesTab> {
       await Supabase.instance.client
           .from('point_earning_rules')
           .update({'is_active': value}).eq('id', id);
-      ref.refresh(pointRulesProvider);
+      ref.invalidate(pointRulesProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -565,7 +565,7 @@ class _EditPointRuleDialogState extends State<_EditPointRuleDialog> {
             .update(data)
             .eq('id', widget.rule!['id']);
       }
-      widget.ref.refresh(pointRulesProvider);
+      widget.ref.invalidate(pointRulesProvider);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -764,7 +764,7 @@ class _XpRulesTabState extends ConsumerState<_XpRulesTab> {
       await Supabase.instance.client
           .from('xp_earning_rules')
           .update({'is_active': value}).eq('id', id);
-      ref.refresh(xpRulesProvider);
+      ref.invalidate(xpRulesProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -843,7 +843,7 @@ class _EditXpRuleDialogState extends State<_EditXpRuleDialog> {
             .update(data)
             .eq('id', widget.rule!['id']);
       }
-      widget.ref.refresh(xpRulesProvider);
+      widget.ref.invalidate(xpRulesProvider);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1099,7 +1099,7 @@ class _MilestoneTileState extends State<_MilestoneTile> {
         'xp': int.tryParse(_xpCtrl.text.trim()),
         'message': _msgCtrl.text.trim(),
       }).eq('id', widget.milestone['id']);
-      widget.ref.refresh(streakConfigsProvider);
+      widget.ref.invalidate(streakConfigsProvider);
       if (mounted) {
         setState(() => _expanded = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1435,7 +1435,7 @@ class _AddBoxDialogState extends State<_AddBoxDialog> {
         'box_type': _boxType,
         'is_active': _isActive,
       });
-      widget.ref.refresh(rewardBoxesProvider);
+      widget.ref.invalidate(rewardBoxesProvider);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1637,7 +1637,7 @@ class _RedemptionOptionsTab extends ConsumerWidget {
       await Supabase.instance.client
           .from('redemption_options')
           .update({'is_active': value}).eq('id', id);
-      ref.refresh(redemptionOptionsProvider);
+      ref.invalidate(redemptionOptionsProvider);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

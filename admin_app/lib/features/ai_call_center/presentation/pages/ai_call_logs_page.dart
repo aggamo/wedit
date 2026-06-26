@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/theme/app_theme.dart';
 import '../../providers/ai_call_provider.dart';
@@ -208,7 +208,7 @@ class _StatCard extends StatelessWidget {
 
 class _LogCard extends ConsumerWidget {
   final Map<String, dynamic> log;
-  const _LogCard({super.key, required this.log});
+  const _LogCard({required this.log});
 
   Color _statusColor(String status) {
     switch (status) {
@@ -325,8 +325,8 @@ class _LogCard extends ConsumerWidget {
                     style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.primaryColor,
-                    side: BorderSide(color: AppTheme.primaryColor),
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: AppColors.primary),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),

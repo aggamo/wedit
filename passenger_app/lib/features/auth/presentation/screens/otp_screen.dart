@@ -197,12 +197,19 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   ),
                   children: [
                     const TextSpan(text: 'تم إرسال الرمز إلى '),
-                    TextSpan(
-                      text: widget.phone,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                        direction: TextDirection.ltr,
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          widget.phone,
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ),
                     ),
                   ],

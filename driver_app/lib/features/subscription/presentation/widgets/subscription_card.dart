@@ -83,7 +83,7 @@ class SubscriptionCard extends StatelessWidget {
       case 'monthly':
         return Icons.calendar_month_rounded;
       default:
-        return Icons.subscription_rounded;
+        return Icons.card_membership_rounded;
     }
   }
 

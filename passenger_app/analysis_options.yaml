@@ -9,6 +9,12 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  errors:
+    # riverpod_generator's generated .g.dart code legitimately calls
+    # provider `.internal` constructors; this is a known false positive.
+    invalid_use_of_internal_member: ignore
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

@@ -60,7 +60,6 @@ class CompetitionsNotifier
             'لم يتم العثور على إعدادات للفترة: $periodType', StackTrace.current);
         return;
       }
-      final updated = current.copyWith(prizes: prizes);
       await _ds.updateSettings(current.id, {
         'prizes': prizes.map((p) => p.toJson()).toList(),
       });

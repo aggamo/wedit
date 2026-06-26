@@ -285,7 +285,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             .select('id')
             .eq('document_id', doc['id'])
             .count(CountOption.exact);
-        count = countResponse.count ?? 0;
+        count = countResponse.count;
       }
 
       if (mounted) {

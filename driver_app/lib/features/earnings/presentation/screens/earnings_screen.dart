@@ -63,9 +63,6 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final period = ref.watch(_earningsPeriodProvider);
-    final earningsAsync = ref.watch(_earningsDataProvider(period));
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('أرباحي'),

@@ -7,28 +7,31 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/custom_button.dart';
 
-final _approvalStatusProvider = StreamProvider<String>((ref) {
+final _approvalStatusProvider = StreamProvider<String>((ref) async* {
   final supabase = Supabase.instance.client;
   final userId = supabase.auth.currentUser?.id;
-  if (userId == null) return Stream.value('unknown');
+  if (userId == null) {
+    yield 'unknown';
+    return;
+  }
+
+  yield 'pending|';
 
   // Poll every 30 seconds
-  return Stream.periodic(const Duration(seconds: 30), (_) => userId)
-      .asyncMap(
-        (id) async {
-          try {
-            final data = await supabase
-                .from('drivers')
-                .select('status, rejection_reason')
-                .eq('id', id)
-                .single();
-            return '${data['status']}|${data['rejection_reason'] ?? ''}';
-          } catch (_) {
-            return 'pending|';
-          }
-        },
-      )
-      .startWith('pending|');
+  yield* Stream.periodic(const Duration(seconds: 30), (_) => userId).asyncMap(
+    (id) async {
+      try {
+        final data = await supabase
+            .from('drivers')
+            .select('status, rejection_reason')
+            .eq('id', id)
+            .single();
+        return '${data['status']}|${data['rejection_reason'] ?? ''}';
+      } catch (_) {
+        return 'pending|';
+      }
+    },
+  );
 });
 
 class PendingApprovalScreen extends ConsumerStatefulWidget {

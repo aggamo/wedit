@@ -27,15 +27,6 @@ class _CallCenterPageState extends ConsumerState<CallCenterPage> {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
 
-  static const LatLng _addisCenter = LatLng(9.0280, 38.7469);
-
-  static const _vehicleTypes = [
-    ('sedan', 'سيدان'),
-    ('suv', 'SUV'),
-    ('vip', 'VIP'),
-    ('minibus', 'ميني باص'),
-  ];
-
   @override
   void dispose() {
     _phoneCtrl.dispose();

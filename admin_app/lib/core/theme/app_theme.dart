@@ -46,7 +46,7 @@ class AppTheme {
           color: AppColors.textPrimary,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.cardBg,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -131,7 +131,7 @@ class AppTheme {
         selectedLabelTextStyle: TextStyle(color: Colors.white, fontSize: 12),
         unselectedLabelTextStyle: TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
       ),
-      tabBarTheme: TabBarTheme(
+      tabBarTheme: TabBarThemeData(
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textSecondary,
         indicatorColor: AppColors.primary,

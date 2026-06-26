@@ -615,7 +615,7 @@ class _DocumentCard extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
               await service.approveDriverDocument(doc['id'] as String, true);
-              ref.refresh(_driverDetailProvider(driverId));
+              ref.invalidate(_driverDetailProvider(driverId));
             },
             child: const Text('قبول'),
           ),
@@ -654,7 +654,7 @@ class _DocumentCard extends StatelessWidget {
               Navigator.pop(ctx);
               await service.approveDriverDocument(doc['id'] as String, false,
                   reason: reasonCtrl.text.trim());
-              ref.refresh(_driverDetailProvider(driverId));
+              ref.invalidate(_driverDetailProvider(driverId));
             },
             child: const Text('رفض'),
           ),
@@ -862,7 +862,7 @@ class _ActionButtonsBar extends StatelessWidget {
     );
     if (confirm == true) {
       await service.updateDriverStatus(driverId, 'active');
-      ref.refresh(_driverDetailProvider(driverId));
+      ref.invalidate(_driverDetailProvider(driverId));
     }
   }
 
@@ -900,7 +900,7 @@ class _ActionButtonsBar extends StatelessWidget {
     if (confirm == true) {
       await service.updateDriverStatus(driverId, 'rejected',
           reason: reasonCtrl.text.trim());
-      ref.refresh(_driverDetailProvider(driverId));
+      ref.invalidate(_driverDetailProvider(driverId));
     }
   }
 
@@ -938,7 +938,7 @@ class _ActionButtonsBar extends StatelessWidget {
     if (confirm == true) {
       await service.updateDriverStatus(driverId, 'suspended',
           reason: reasonCtrl.text.trim());
-      ref.refresh(_driverDetailProvider(driverId));
+      ref.invalidate(_driverDetailProvider(driverId));
     }
   }
 
@@ -960,7 +960,7 @@ class _ActionButtonsBar extends StatelessWidget {
     );
     if (confirm == true) {
       await service.updateDriverStatus(driverId, 'active');
-      ref.refresh(_driverDetailProvider(driverId));
+      ref.invalidate(_driverDetailProvider(driverId));
     }
   }
 }

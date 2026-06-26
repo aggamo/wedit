@@ -6,16 +6,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/constants/app_constants.dart';
-import '../../../../core/errors/failures.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../data/datasources/registration_remote_datasource.dart';
 import '../../data/repositories/registration_repository_impl.dart';
 import '../../domain/entities/driver_registration_entity.dart';
-
-final _registrationDataProvider =
-    StateProvider<DriverRegistrationEntity>((ref) => const DriverRegistrationEntity());
 
 final _registrationLoadingProvider = StateProvider<bool>((ref) => false);
 
@@ -51,13 +46,6 @@ class _DriverRegistrationScreenState
   final _modelController = TextEditingController();
   final _yearController = TextEditingController();
   final _colorController = TextEditingController();
-
-  final _formKeys = [
-    GlobalKey<FormState>(),
-    GlobalKey<FormState>(),
-    GlobalKey<FormState>(),
-    GlobalKey<FormState>(),
-  ];
 
   @override
   void dispose() {
@@ -502,7 +490,7 @@ class _DriverRegistrationScreenState
               child: hasFile
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.file(file!, fit: BoxFit.cover),
+                      child: Image.file(file, fit: BoxFit.cover),
                     )
                   : Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),

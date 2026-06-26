@@ -41,13 +41,15 @@ final dashboardStatsProvider = FutureProvider<Map<String, dynamic>>((ref) async 
 
     final ridesCount = await supabase
         .from('rides')
-        .select('id', const FetchOptions(count: CountOption.exact, head: true))
-        .gte('created_at', startOfDay);
+        .select('id')
+        .gte('created_at', startOfDay)
+        .count(CountOption.exact);
 
     final activeDrivers = await supabase
         .from('drivers')
-        .select('id', const FetchOptions(count: CountOption.exact, head: true))
-        .eq('status', 'online');
+        .select('id')
+        .eq('status', 'online')
+        .count(CountOption.exact);
 
     final revenue = await supabase
         .from('rides')
@@ -62,14 +64,15 @@ final dashboardStatsProvider = FutureProvider<Map<String, dynamic>>((ref) async 
 
     final newRegistrations = await supabase
         .from('drivers')
-        .select('id', const FetchOptions(count: CountOption.exact, head: true))
-        .gte('created_at', startOfDay);
+        .select('id')
+        .gte('created_at', startOfDay)
+        .count(CountOption.exact);
 
     return {
-      'rides_today': ridesCount.count ?? 0,
-      'active_drivers': activeDrivers.count ?? 0,
+      'rides_today': ridesCount.count,
+      'active_drivers': activeDrivers.count,
       'revenue_today': totalRevenue,
-      'new_registrations': newRegistrations.count ?? 0,
+      'new_registrations': newRegistrations.count,
     };
   } catch (e) {
     return {
@@ -87,24 +90,27 @@ final pendingCountsProvider = FutureProvider<Map<String, int>>((ref) async {
   try {
     final pendingDrivers = await supabase
         .from('drivers')
-        .select('id', const FetchOptions(count: CountOption.exact, head: true))
-        .eq('status', 'pending');
+        .select('id')
+        .eq('status', 'pending')
+        .count(CountOption.exact);
 
     final pendingTransfers = await supabase
         .from('subscriptions')
-        .select('id', const FetchOptions(count: CountOption.exact, head: true))
+        .select('id')
         .eq('payment_method', 'bank_transfer')
-        .eq('payment_status', 'pending');
+        .eq('payment_status', 'pending')
+        .count(CountOption.exact);
 
     final openComplaints = await supabase
         .from('complaints')
-        .select('id', const FetchOptions(count: CountOption.exact, head: true))
-        .eq('status', 'open');
+        .select('id')
+        .eq('status', 'open')
+        .count(CountOption.exact);
 
     return {
-      'pending_drivers': pendingDrivers.count ?? 0,
-      'pending_transfers': pendingTransfers.count ?? 0,
-      'open_complaints': openComplaints.count ?? 0,
+      'pending_drivers': pendingDrivers.count,
+      'pending_transfers': pendingTransfers.count,
+      'open_complaints': openComplaints.count,
     };
   } catch (e) {
     return {

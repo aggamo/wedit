@@ -182,7 +182,7 @@ class _AchievementsListTab extends ConsumerWidget {
       await Supabase.instance.client
           .from('achievements')
           .update({'is_active': value}).eq('id', id);
-      ref.refresh(achievementsProvider);
+      ref.invalidate(achievementsProvider);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -277,7 +277,7 @@ class _AchievementFormDialogState extends State<_AchievementFormDialog> {
             .update(data)
             .eq('id', widget.achievement!['id']);
       }
-      widget.ref.refresh(achievementsProvider);
+      widget.ref.invalidate(achievementsProvider);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

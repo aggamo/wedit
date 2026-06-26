@@ -21,12 +21,12 @@ class SupabaseAdminService {
     final user = _client.auth.currentUser;
     if (user == null) return false;
     try {
-      final res = await _client
+      await _client
           .from('admins')
           .select('id')
           .eq('user_id', user.id)
           .single();
-      return res != null;
+      return true;
     } catch (_) {
       return false;
     }

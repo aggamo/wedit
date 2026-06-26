@@ -194,7 +194,7 @@ class _RideOffersScreenState extends ConsumerState<RideOffersScreen> {
 
     final double resolvedSystemPrice = widget.systemPrice > 0
         ? widget.systemPrice
-        : ref.watch(rideStateProvider).currentRide?.agreedPrice ?? 0;
+        : ref.watch(rideStateProvider).currentRide?.offeredPrice ?? 0;
 
     return Scaffold(
       appBar: AppBar(
@@ -249,26 +249,26 @@ class _RideOffersScreenState extends ConsumerState<RideOffersScreen> {
                 Text('عروض السائقين',
                     style: theme.textTheme.titleSmall),
                 const SizedBox(width: 8),
-                offersAsync.whenData(
-                      (offers) => offers.isNotEmpty
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '${offers.length}',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ) ??
-                    const SizedBox.shrink(),
+                offersAsync.maybeWhen(
+                  data: (offers) => offers.isNotEmpty
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${offers.length}',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                  orElse: () => const SizedBox.shrink(),
+                ),
               ],
             ),
           ),

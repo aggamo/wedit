@@ -2,6 +2,7 @@ import 'package:data_table_2/data_table_2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/providers/admin_provider.dart';
 import '../../../../core/services/supabase_admin_service.dart';
@@ -49,8 +50,8 @@ final referralStatsProvider =
     }
 
     return {
-      'total': all.count ?? 0,
-      'rewarded': rewarded.count ?? 0,
+      'total': all.count,
+      'rewarded': rewarded.count,
       'total_points': totalPoints,
     };
   } catch (_) {

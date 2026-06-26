@@ -1,5 +1,14 @@
 import 'package:flutter/material.dart';
 
+class AppColors {
+  static const Color primary = Color(0xFFa41c28);
+  static const Color success = Color(0xFF2c7737);
+  static const Color error = Color(0xFFB00020);
+  static const Color surfaceVariant = Color(0xFFF1F3F4);
+  static const Color textPrimary = Color(0xFF212121);
+  static const Color textSecondary = Color(0xFF757575);
+}
+
 class AppTheme {
   AppTheme._();
 
@@ -39,7 +48,7 @@ class AppTheme {
           color: colorScheme.onSurface,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),

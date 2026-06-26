@@ -166,9 +166,6 @@ class LeaderboardRemoteDatasourceImpl
       final passengerReferralsRequired =
           (raffleConditions['passenger_referrals'] as int?) ??
               AppConstants.raffleRequiredInvites;
-      final driverReferralsRequired =
-          (raffleConditions['driver_referrals'] as int?) ?? 0;
-
       if (myRankings.isEmpty) {
         return MyRankEntity(
           rank: 0,
