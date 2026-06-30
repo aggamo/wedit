@@ -243,31 +243,29 @@ CREATE OR REPLACE FUNCTION on_ride_completed()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
+DECLARE
+  v_referral_id uuid;
+  v_ride_count  integer;
 BEGIN
   IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
     PERFORM award_ride_points(NEW.id);
 
     -- Check if this is the referred user's first ride, and if so reward referral
-    DECLARE
-      v_referral_id uuid;
-      v_ride_count  integer;
-    BEGIN
-      SELECT total_rides INTO v_ride_count
-      FROM profiles WHERE id = NEW.passenger_id;
+    SELECT total_rides INTO v_ride_count
+    FROM profiles WHERE id = NEW.passenger_id;
 
-      -- If this is the first completed ride (total_rides was just incremented to 1)
-      IF v_ride_count = 1 THEN
-        SELECT id INTO v_referral_id
-        FROM referrals
-        WHERE referred_id = NEW.passenger_id
-          AND status IN ('pending','completed')
-        LIMIT 1;
+    -- If this is the first completed ride (total_rides was just incremented to 1)
+    IF v_ride_count = 1 THEN
+      SELECT id INTO v_referral_id
+      FROM referrals
+      WHERE referred_id = NEW.passenger_id
+        AND status IN ('pending','completed')
+      LIMIT 1;
 
-        IF v_referral_id IS NOT NULL THEN
-          PERFORM process_referral_reward(v_referral_id);
-        END IF;
+      IF v_referral_id IS NOT NULL THEN
+        PERFORM process_referral_reward(v_referral_id);
       END IF;
-    END;
+    END IF;
   END IF;
   RETURN NEW;
 END;

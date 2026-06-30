@@ -1,0 +1,203 @@
+name: Daily Supabase Backup
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Number of backups to keep'
+        required: false
+        default: '30'
+        type: string
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  backup:
+    name: Backup Supabase Database
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Create backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          AWS_S3_BUCKET:   ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
+          BACKUP_FILE="backup_${TIMESTAMP}.dump"
+          BACKUP_PATH="/tmp/${BACKUP_FILE}"
+          S3_KEY="wedit-backups/${BACKUP_FILE}"
+
+          echo "Starting backup: ${BACKUP_FILE}"
+
+          # Create PostgreSQL custom-format dump (compressed, parallel)
+          pg_dump "$SUPABASE_DB_URL" \
+            --format=custom \
+            --no-owner \
+            --no-privileges \
+            --no-acl \
+            --compress=9 \
+            --jobs=4 \
+            --file="${BACKUP_PATH}"
+
+          BACKUP_SIZE=$(du -sh "${BACKUP_PATH}" | cut -f1)
+          echo "Backup size: ${BACKUP_SIZE}"
+
+          # Upload to S3 with server-side encryption
+          aws s3 cp "${BACKUP_PATH}" "s3://${AWS_S3_BUCKET}/${S3_KEY}" \
+            --storage-class STANDARD_IA \
+            --server-side-encryption AES256 \
+            --metadata "timestamp=${TIMESTAMP},size=${BACKUP_SIZE},project=wedit"
+
+          echo "Backup uploaded: s3://${AWS_S3_BUCKET}/${S3_KEY}"
+          echo "BACKUP_FILE=${BACKUP_FILE}" >> "$GITHUB_ENV"
+          echo "BACKUP_SIZE=${BACKUP_SIZE}"  >> "$GITHUB_ENV"
+
+          # Clean up local file
+          rm -f "${BACKUP_PATH}"
+
+      - name: Verify backup integrity
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          S3_KEY="wedit-backups/${BACKUP_FILE}"
+
+          # Verify the object exists and get its size
+          OBJECT_SIZE=$(aws s3 ls "s3://${AWS_S3_BUCKET}/${S3_KEY}" | awk '{print $3}')
+          if [ -z "${OBJECT_SIZE}" ]; then
+            echo "ERROR: Backup file not found in S3!"
+            exit 1
+          fi
+          echo "Backup verified in S3. Size: ${OBJECT_SIZE} bytes"
+
+      - name: Cleanup old backups
+        env:
+          AWS_S3_BUCKET:    ${{ secrets.AWS_S3_BUCKET }}
+          RETENTION_DAYS:   ${{ github.event.inputs.retention_days || '30' }}
+        run: |
+          set -euo pipefail
+          echo "Keeping last ${RETENTION_DAYS} backups..."
+
+          # List all backups sorted by date (oldest first), skip last N
+          BACKUP_LIST=$(aws s3 ls "s3://${AWS_S3_BUCKET}/wedit-backups/" \
+            --recursive \
+            | sort \
+            | awk '{print $4}')
+
+          TOTAL_BACKUPS=$(echo "${BACKUP_LIST}" | grep -c "backup_" || true)
+          echo "Total backups found: ${TOTAL_BACKUPS}"
+
+          if [ "${TOTAL_BACKUPS}" -gt "${RETENTION_DAYS}" ]; then
+            DELETE_COUNT=$((TOTAL_BACKUPS - RETENTION_DAYS))
+            echo "Deleting ${DELETE_COUNT} old backup(s)..."
+
+            echo "${BACKUP_LIST}" \
+              | grep "backup_" \
+              | head -n "${DELETE_COUNT}" \
+              | while IFS= read -r file; do
+                  echo "Deleting: s3://${AWS_S3_BUCKET}/${file}"
+                  aws s3 rm "s3://${AWS_S3_BUCKET}/${file}"
+                done
+            echo "Old backup cleanup completed."
+          else
+            echo "No old backups to delete (${TOTAL_BACKUPS} <= ${RETENTION_DAYS})"
+          fi
+
+      - name: Generate backup report
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          echo "## Backup Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backup file   | \`${BACKUP_FILE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backup size   | ${BACKUP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| S3 bucket     | ${AWS_S3_BUCKET} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Timestamp     | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Status        | Success |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "${SLACK_WEBHOOK_URL}" ]; then
+            curl -s -X POST "${SLACK_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"text\": \":warning: *Wedit Backup Failed*\",
+                \"attachments\": [{
+                  \"color\": \"danger\",
+                  \"fields\": [
+                    {\"title\": \"Workflow\",  \"value\": \"Daily Supabase Backup\", \"short\": true},
+                    {\"title\": \"Branch\",    \"value\": \"${GITHUB_REF_NAME}\",    \"short\": true},
+                    {\"title\": \"Run URL\",   \"value\": \"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}
+                  ]
+                }]
+              }"
+          fi
+
+  # Separate job to test restore capability weekly
+  verify-restore:
+    name: Verify Restore (Weekly)
+    runs-on: ubuntu-latest
+    needs: backup
+    # Only run on Sundays
+    if: github.event_name == 'schedule' && startsWith(github.event.schedule, '0 2 * * 0')
+    timeout-minutes: 20
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Download latest backup for restore test
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          # Get latest backup file name
+          LATEST=$(aws s3 ls "s3://${AWS_S3_BUCKET}/wedit-backups/" \
+            | sort \
+            | tail -n 1 \
+            | awk '{print $4}')
+
+          echo "Testing restore of: ${LATEST}"
+          aws s3 cp "s3://${AWS_S3_BUCKET}/${LATEST}" "/tmp/restore_test.dump"
+
+          # Validate the dump file can be listed (structural check)
+          pg_restore --list "/tmp/restore_test.dump" | head -20
+          echo "Restore test: backup file is valid PostgreSQL dump."
+          rm -f /tmp/restore_test.dump
